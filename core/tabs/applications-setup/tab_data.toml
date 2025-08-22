@@ -6,7 +6,11 @@ name = "Rahul Setups"
 
 
 
-
+[[data.entries]]
+name = "rustdesk-client-setup"
+description = "Install and setup RustDesk client"
+script = "rahul-setups/rustdesk-client.sh"
+task_list = "I"
 
 [[data.entries]]
 name = "macos-setup"

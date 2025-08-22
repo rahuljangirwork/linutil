@@ -1,0 +1,393 @@
+.
+├── Cargo.lock
+├── Cargo.toml
+├── LICENSE
+├── README.md
+├── _typos.toml
+├── core
+│   ├── Cargo.toml
+│   ├── src
+│   │   ├── inner.rs
+│   │   └── lib.rs
+│   └── tabs
+│       ├── applications-setup
+│       │   ├── Developer-tools
+│       │   │   ├── githubdesktop-setup.sh
+│       │   │   ├── meld-setup.sh
+│       │   │   ├── neovim-setup.sh
+│       │   │   ├── ngrok-setup.sh
+│       │   │   ├── sublime-setup.sh
+│       │   │   ├── vscode-setup.sh
+│       │   │   └── vscodium-setup.sh
+│       │   ├── alacritty-setup.sh
+│       │   ├── android-debloat.sh
+│       │   ├── bottles-setup.sh
+│       │   ├── browsers
+│       │   │   ├── brave.sh
+│       │   │   ├── chromium.sh
+│       │   │   ├── firefox.sh
+│       │   │   ├── google-chrome.sh
+│       │   │   ├── librewolf.sh
+│       │   │   ├── lynx.sh
+│       │   │   ├── thorium.sh
+│       │   │   └── vivaldi.sh
+│       │   ├── communication-apps
+│       │   │   ├── discord-setup.sh
+│       │   │   ├── jitsi-setup.sh
+│       │   │   ├── signal-setup.sh
+│       │   │   ├── slack-setup.sh
+│       │   │   ├── telegram-setup.sh
+│       │   │   ├── thunderbird-setup.sh
+│       │   │   └── zoom-setup.sh
+│       │   ├── docker-setup.sh
+│       │   ├── dwmtitus-setup.sh
+│       │   ├── fastfetch-setup.sh
+│       │   ├── grub-theme.sh
+│       │   ├── kitty-setup.sh
+│       │   ├── linutil-installer.sh
+│       │   ├── linutil-updater.sh
+│       │   ├── mybash-setup.sh
+│       │   ├── office-suites
+│       │   │   ├── freeoffice.sh
+│       │   │   ├── libreoffice.sh
+│       │   │   ├── onlyoffice.sh
+│       │   │   └── wpsoffice.sh
+│       │   ├── pdf-suites
+│       │   │   ├── evince.sh
+│       │   │   ├── okular.sh
+│       │   │   ├── pdfstudio.sh
+│       │   │   └── pdfstudioviewer.sh
+│       │   ├── rahul-setups
+│       │   │   ├── alacritty-setup.sh
+│       │   │   ├── cursor-setup.sh
+│       │   │   ├── dwmrahul-setup.sh
+│       │   │   ├── github-setup.sh
+│       │   │   ├── macos.sh
+│       │   │   ├── mybash-setup.sh
+│       │   │   ├── neovim-setup.sh
+│       │   │   ├── rofi-setup.sh
+│       │   │   ├── rustdesk-client.sh
+│       │   │   └── uneovim-setup.sh
+│       │   ├── rofi-setup.sh
+│       │   ├── setup-flatpak.sh
+│       │   ├── tab_data.toml
+│       │   ├── waydroid-setup.sh
+│       │   └── zsh-setup.sh
+│       ├── common-script.sh
+│       ├── gaming
+│       │   ├── diablo-ii
+│       │   │   └── d2r-loot-filters.sh
+│       │   └── tab_data.toml
+│       ├── security
+│       │   ├── firewall-baselines.sh
+│       │   └── tab_data.toml
+│       ├── system-setup
+│       │   ├── arch
+│       │   │   ├── paru-setup.sh
+│       │   │   ├── server-setup.sh
+│       │   │   └── yay-setup.sh
+│       │   ├── compile-setup.sh
+│       │   ├── fedora
+│       │   │   ├── configure-dnf.sh
+│       │   │   ├── multimedia-codecs.sh
+│       │   │   ├── nvidia-proprietary-driver-setup.sh
+│       │   │   ├── rpm-fusion-setup.sh
+│       │   │   └── virtualization.sh
+│       │   ├── gaming-setup.sh
+│       │   ├── global-theme.sh
+│       │   ├── remove-snaps.sh
+│       │   ├── system-cleanup.sh
+│       │   ├── system-update.sh
+│       │   ├── tab_data.toml
+│       │   └── terminus-tty.sh
+│       ├── tabs.toml
+│       └── utils
+│           ├── auto-login.sh
+│           ├── auto-mount.sh
+│           ├── bluetooth-control.sh
+│           ├── create-bootable-usb.sh
+│           ├── encrypt_decrypt_tool.sh
+│           ├── monitor-control
+│           │   ├── auto_detect_displays.sh
+│           │   ├── change_orientation.sh
+│           │   ├── disable_monitor.sh
+│           │   ├── duplicate_displays.sh
+│           │   ├── enable_monitor.sh
+│           │   ├── extend_displays.sh
+│           │   ├── manage_arrangement.sh
+│           │   ├── reset_scaling.sh
+│           │   ├── scale_monitor.sh
+│           │   ├── set_brightness.sh
+│           │   ├── set_primary_monitor.sh
+│           │   └── set_resolutions.sh
+│           ├── numlock.sh
+│           ├── ollama.sh
+│           ├── power-profile.sh
+│           ├── samba-ssh-setup.sh
+│           ├── service-control.sh
+│           ├── services
+│           │   └── i3lock-on-lid-close.service
+│           ├── ssh.sh
+│           ├── tab_data.toml
+│           ├── timeshift.sh
+│           ├── user-account-manager
+│           │   ├── add_to_group.sh
+│           │   ├── add_user.sh
+│           │   ├── change_password.sh
+│           │   ├── delete_user.sh
+│           │   └── remove_from_group.sh
+│           ├── utility_functions.sh
+│           └── wifi-control.sh
+├── docs
+│   ├── KnownIssues.md
+│   ├── assets
+│   │   ├── favicon.png
+│   │   ├── preview.gif
+│   │   └── preview.tape
+│   ├── contributing.md
+│   ├── faq.md
+│   ├── index.md
+│   ├── roadmap.md
+│   └── userguide.md
+├── linutil.desktop
+├── man
+│   └── linutil.1
+├── overrides
+│   └── main.html
+├── start.sh
+├── startdev.sh
+├── structure.txt
+├── tui
+│   ├── Cargo.toml
+│   ├── build.rs
+│   ├── cool_tips.txt
+│   └── src
+│       ├── confirmation.rs
+│       ├── filter.rs
+│       ├── float.rs
+│       ├── floating_text.rs
+│       ├── hint.rs
+│       ├── main.rs
+│       ├── running_command.rs
+│       ├── state.rs
+│       └── theme.rs
+└── xtask
+    ├── Cargo.toml
+    └── src
+        ├── docgen.rs
+        ├── main.rs
+        └── path.rs
+
+29 directories, 150 files
+
+that i my projact
+
+#!/bin/sh -e
+
+
+# shellcheck disable=SC2034
+
+
+RC='\033[0m'
+RED='\033[31m'
+YELLOW='\033[33m'
+CYAN='\033[36m'
+GREEN='\033[32m'
+
+
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+
+checkAURHelper() {
+    ## Check & Install AUR helper
+    if [ "$PACKAGER" = "pacman" ]; then
+        if [ -z "$AUR_HELPER_CHECKED" ]; then
+            AUR_HELPERS="yay paru"
+            for helper in ${AUR_HELPERS}; do
+                if command_exists "${helper}"; then
+                    AUR_HELPER=${helper}
+                    printf "%b\n" "${CYAN}Using ${helper} as AUR helper${RC}"
+                    AUR_HELPER_CHECKED=true
+                    return 0
+                fi
+            done
+
+
+            printf "%b\n" "${YELLOW}Installing yay as AUR helper...${RC}"
+            "$ESCALATION_TOOL" "$PACKAGER" -S --needed --noconfirm base-devel git
+            cd /opt && "$ESCALATION_TOOL" git clone https://aur.archlinux.org/yay-bin.git && "$ESCALATION_TOOL" chown -R "$USER":"$USER" ./yay-bin
+            cd yay-bin && makepkg --noconfirm -si
+
+
+            if command_exists yay; then
+                AUR_HELPER="yay"
+                AUR_HELPER_CHECKED=true
+            else
+                printf "%b\n" "${RED}Failed to install AUR helper.${RC}"
+                exit 1
+            fi
+        fi
+    fi
+}
+
+
+checkEscalationTool() {
+    ## Check for escalation tools.
+    if [ -z "$ESCALATION_TOOL_CHECKED" ]; then
+        ESCALATION_TOOLS='sudo doas'
+        for tool in ${ESCALATION_TOOLS}; do
+            if command_exists "${tool}"; then
+                ESCALATION_TOOL=${tool}
+                printf "%b\n" "${CYAN}Using ${tool} for privilege escalation${RC}"
+                ESCALATION_TOOL_CHECKED=true
+                return 0
+            fi
+        done
+
+
+        printf "%b\n" "${RED}Can't find a supported escalation tool${RC}"
+        exit 1
+    fi
+}
+
+
+checkCommandRequirements() {
+    ## Check for requirements.
+    REQUIREMENTS=$1
+    for req in ${REQUIREMENTS}; do
+        if ! command_exists "${req}"; then
+            printf "%b\n" "${RED}To run me, you need: ${REQUIREMENTS}${RC}"
+            exit 1
+        fi
+    done
+}
+
+
+checkPackageManager() {
+    ## Check Package Manager
+    PACKAGEMANAGER=$1
+    for pgm in ${PACKAGEMANAGER}; do
+        if command_exists "${pgm}"; then
+            PACKAGER=${pgm}
+            printf "%b\n" "${CYAN}Using ${pgm} as package manager${RC}"
+            break
+        fi
+    done
+
+
+    if [ -z "$PACKAGER" ]; then
+        printf "%b\n" "${RED}Can't find a supported package manager${RC}"
+        exit 1
+    fi
+}
+
+
+checkSuperUser() {
+    ## Check SuperUser Group
+    SUPERUSERGROUP='wheel sudo root'
+    for sug in ${SUPERUSERGROUP}; do
+        if groups | grep -q "${sug}"; then
+            SUGROUP=${sug}
+            printf "%b\n" "${CYAN}Super user group ${SUGROUP}${RC}"
+            break
+        fi
+    done
+
+
+    ## Check if member of the sudo group.
+    if ! groups | grep -q "${SUGROUP}"; then
+        printf "%b\n" "${RED}You need to be a member of the sudo group to run me!${RC}"
+        exit 1
+    fi
+}
+
+
+checkCurrentDirectoryWritable() {
+    ## Check if the current directory is writable.
+    GITPATH="$(dirname "$(realpath "$0")")"
+    if [ ! -w "$GITPATH" ]; then
+        printf "%b\n" "${RED}Can't write to $GITPATH${RC}"
+        exit 1
+    fi
+}
+
+
+checkDistro() {
+    DTYPE="unknown"  # Default to unknown
+    # Use /etc/os-release for modern distro identification
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        DTYPE=$ID
+    fi
+}
+
+
+checkEnv() {
+    checkEscalationTool
+    checkCommandRequirements "curl groups $ESCALATION_TOOL"
+    checkPackageManager 'nala apt-get dnf pacman zypper'
+    checkCurrentDirectoryWritable
+    checkSuperUser
+    checkDistro
+    checkAURHelper
+}
+
+i can not cnager is 
+
+now i want to amke 
+
+rustdesk-client.sh
+
+there i can install rustdesk clint in apt and dfn and arch
+
+i will give you example how i write script 
+
+
+#!/bin/sh -e
+
+
+. ../../common-script.sh
+
+
+installAlacritty() {
+    if ! command_exists alacritty; then
+    printf "%b\n" "${YELLOW}Installing Alacritty...${RC}"
+        case "$PACKAGER" in
+            pacman)
+                "$ESCALATION_TOOL" "$PACKAGER" -S --needed --noconfirm alacritty
+                ;;
+            *)
+                "$ESCALATION_TOOL" "$PACKAGER" install -y alacritty
+                ;;
+        esac
+    else
+        printf "%b\n" "${GREEN}Alacritty is already installed.${RC}"
+    fi
+}
+
+
+setupAlacrittyConfig() {
+    printf "%b\n" "${YELLOW}Copying alacritty config files...${RC}"
+    if [ -d "${HOME}/.config/alacritty" ] && [ ! -d "${HOME}/.config/alacritty-bak" ]; then
+        cp -r "${HOME}/.config/alacritty" "${HOME}/.config/alacritty-bak"
+    fi
+    mkdir -p "${HOME}/.config/alacritty/"
+    curl -sSLo "${HOME}/.config/alacritty/alacritty.toml" "https://github.com/ChrisTitusTech/dwm-titus/raw/main/config/alacritty/alacritty.toml"
+    curl -sSLo "${HOME}/.config/alacritty/keybinds.toml" "https://github.com/ChrisTitusTech/dwm-titus/raw/main/config/alacritty/keybinds.toml"
+    curl -sSLo "${HOME}/.config/alacritty/nordic.toml" "https://github.com/ChrisTitusTech/dwm-titus/raw/main/config/alacritty/nordic.toml"
+    printf "%b\n" "${GREEN}Alacritty configuration files copied.${RC}"
+}
+
+
+checkEnv
+checkEscalationTool
+installAlacritty
+setupAlacrittyConfig
+
+that is the ay i use write sscript
+
+help me to make 
+
+rustdesk-client.sh
