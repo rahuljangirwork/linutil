@@ -294,7 +294,6 @@ impl AppState {
             return frame.render_widget(warning, centered_layout[1]);
         }
 
-<<<<<<< HEAD
         let label_block = Block::bordered().border_set(border::Set {
             top_left: " ",
             top_right: " ",
@@ -306,23 +305,6 @@ impl AppState {
             horizontal_bottom: "*",
         });
 
-=======
-        let label_block =
-            Block::default()
-                .borders(Borders::all())
-                .border_set(ratatui::symbols::border::Set {
-                    top_left: " ",
-                    top_right: " ",
-                    bottom_left: " ",
-                    bottom_right: " ",
-                    vertical_left: " ",
-                    vertical_right: " ",
-                    horizontal_top: "*",
-                    horizontal_bottom: "*",
-                });
-        let str1 = "Linutil ";
-        let str2 = "by Rahul";
->>>>>>> d08b586 (update some)
         let label = Paragraph::new(Line::from(vec![
             Span::styled("Linutil ", Style::default().bold()),
             Span::styled("by Chris Titus", Style::default().italic()),
