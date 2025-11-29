@@ -40,10 +40,12 @@ create_non_root_user() {
     username=${username:-rahul} # Set default value if input is empty
 
     if id "$username" >/dev/null 2>&1; then
-        printf "%b\n" "${CYAN}User '$username' already exists. Adding to sudo group.${RC}"
+        printf "%b\n" "${CYAN}User '$username' already exists. Skipping creation.${RC}"
     else
-        printf "Creating user '$username'\n"
-        "$ESCALATION_TOOL" adduser --gecos "" "$username"
+        printf "Creating user '$username'...\n"
+        "$ESCALATION_TOOL" adduser --disabled-password --gecos "" "$username"
+        printf "%b\n" "${YELLOW}User '$username' created without a password.${RC}"
+        printf "%b\n" "${YELLOW}Please set a password for this user by running 'passwd $username' in the terminal.${RC}"
     fi
 
     printf "Adding user '$username' to the sudo group...\n"
