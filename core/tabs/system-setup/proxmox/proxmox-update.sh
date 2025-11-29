@@ -1,6 +1,6 @@
 #!/bin/sh -e
 
-. ../common-script.sh
+. ../../common-script.sh
 
 updateSystem() {
     printf "%b\n" "${YELLOW}Updating Proxmox VE system packages.${RC}"
