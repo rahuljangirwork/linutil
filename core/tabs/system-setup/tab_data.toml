@@ -237,3 +237,10 @@ description = "This command updates your Proxmox VE system to the latest package
 script = "proxmox/proxmox-update.sh"
 task_list = "P MP"
 multi_select = false
+
+[[data.entries]]
+name = "Proxmox Post-Install"
+description = "This script automates the essential post-installation tasks for a new Proxmox VE server."
+script = "proxmox/proxmox-post-install.sh"
+task_list = "P MP FM I"
+multi_select = false
