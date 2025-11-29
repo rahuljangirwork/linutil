@@ -224,13 +224,16 @@ script = "terminus-tty.sh"
 task_list = "I PFM"
 
 [[data]]
-name = "Proxmox Update"
-description = "This command updates your Proxmox VE system to the latest packages."
-script = "proxmox/proxmox-update.sh"
-task_list = "P MP"
-multi_select = false
+name = "Proxmox"
 
 [[data.preconditions]]
 matches = true
 data = "command_exists"
 values = ["pveversion"]
+
+[[data.entries]]
+name = "Proxmox Update"
+description = "This command updates your Proxmox VE system to the latest packages."
+script = "proxmox/proxmox-update.sh"
+task_list = "P MP"
+multi_select = false
