@@ -70,6 +70,7 @@ setup_lxc() {
         --memory "$LXC_MEMORY" \
         --swap 0 \
         --net0 name=eth0,bridge="$LXC_BRIDGE",ip=dhcp \
+        --nameserver 8.8.8.8 \
         --unprivileged 1 \
         --features nesting=1,keyctl=1 \
         --onboot 1 \
