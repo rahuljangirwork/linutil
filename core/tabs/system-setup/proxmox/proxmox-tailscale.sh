@@ -33,14 +33,14 @@ get_lxc_vmid() {
 
 show_menu() {
     printf "\n"
-    printf "%b%s%b\n" "${YELLOW}--- Fully Automatic Proxmox Tailscale LXC Manager ---" "${RC}"
-    printf "%b 1 %b- Setup Tailscale Subnet Router LXC\n" "${GREEN}" "${RC}"
-    printf "%b 2 %b- Destroy Tailscale LXC\n" "${RED}" "${RC}"
-    printf "%b 3 %b- View Tailscale Logs\n" "${GREEN}" "${RC}"
-    printf "%b 4 %b- Enter Tailscale LXC Shell\n" "${GREEN}" "${RC}"
-    printf "%b 5 %b- Check Tailscale Status\n" "${GREEN}" "${RC}"
-    printf "%b q %b- Quit\n" "${GREEN}" "${RC}"
-    printf "%b%s%b" "${YELLOW}Choose an option: " "${RC}"
+    printf "%b\n" "${YELLOW}--- Fully Automatic Proxmox Tailscale LXC Manager ---${NC}"
+    printf "%b 1 %b- Setup Tailscale Subnet Router LXC\n" "${GREEN}" "${NC}"
+    printf "%b 2 %b- Destroy Tailscale LXC\n" "${RED}" "${NC}"
+    printf "%b 3 %b- View Tailscale Logs\n" "${GREEN}" "${NC}"
+    printf "%b 4 %b- Enter Tailscale LXC Shell\n" "${GREEN}" "${NC}"
+    printf "%b 5 %b- Check Tailscale Status\n" "${GREEN}" "${NC}"
+    printf "%b q %b- Quit\n" "${GREEN}" "${NC}"
+    printf "%b" "${YELLOW}Choose an option: ${NC} "
 }
 
 setup_lxc() {
@@ -124,10 +124,11 @@ setup_lxc() {
     pct start "$VMID"
     
     ATTEMPTS=0
-    MAX_ATTEMPTS=30 # Wait for max 3 minutes (30 * 6s)
+    MAX_ATTEMPTS=60 # Wait for max 3 minutes (60 * 3s)
     IP=""
     while [ $ATTEMPTS -lt $MAX_ATTEMPTS ]; do
-        IP=$(pct exec "$VMID" -- ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || true)
+        # Use a more portable command to get the IP
+        IP=$(pct exec "$VMID" -- ip -4 addr show eth0 | grep 'inet ' | awk '{print $2}' | cut -d/ -f1 || true)
         if [ -n "$IP" ]; then
             print_status "Container has IP: $IP. Verifying internet connectivity..."
             if pct exec "$VMID" -- ping -c 1 -W 5 8.8.8.8 >/dev/null 2>&1; then
@@ -139,7 +140,7 @@ setup_lxc() {
         fi
         ATTEMPTS=$((ATTEMPTS + 1))
         printf "${CYAN}Waiting for network... (Attempt $ATTEMPTS/$MAX_ATTEMPTS)${NC}\n"
-        sleep 6
+        sleep 3
     done
 
     if [ $ATTEMPTS -eq $MAX_ATTEMPTS ]; then
@@ -148,9 +149,9 @@ setup_lxc() {
 
     # Step 7: Install and Configure Tailscale
     print_status "[6/8] Installing Tailscale inside the LXC..."
-    pct exec "$VMID" -- apt-get update >/dev/null
-    pct exec "$VMID" -- apt-get install -y curl >/dev/null
-    pct exec "$VMID" -- sh -c "curl -fsSL https://tailscale.com/install.sh | sh" >/dev/null
+    pct exec "$VMID" -- apt-get update
+    pct exec "$VMID" -- apt-get install -y curl
+    pct exec "$VMID" -- sh -c "curl -fsSL https://tailscale.com/install.sh | sh"
     success "Tailscale installed."
 
     print_status "[7/8] Configuring Tailscale as a subnet router..."
@@ -265,11 +266,11 @@ while true; do
             check_status
             ;; 
         q|Q)
-            printf "%b\n" "${GREEN}Exiting.${RC}"
+            printf "%b\n" "${GREEN}Exiting.${NC}"
             exit 0
             ;; 
         *)
-            printf "%b\n" "${RED}Invalid option, please try again.${RC}"
+            printf "%b\n" "${RED}Invalid option, please try again.${NC}"
             ;; 
     esac
 done
