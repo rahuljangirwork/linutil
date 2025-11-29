@@ -58,11 +58,26 @@ setup_lxc() {
         printf "%b\n" "${GREEN}Debian 12 template found.${RC}"
     fi
 
-    # 2. Get next available VMID
+    # 2. Get Host's DNS servers
+    printf "%b\n" "${CYAN}Detecting host's DNS servers...${RC}"
+    HOST_DNS_SERVERS=$(grep '^nameserver' /etc/resolv.conf | awk '{print $2}')
+    if [ -z "$HOST_DNS_SERVERS" ]; then
+        printf "%b\n" "${YELLOW}Could not detect host DNS servers. Falling back to 8.8.8.8.${RC}"
+        HOST_DNS_SERVERS="8.8.8.8"
+    else
+        printf "%b\n" "${GREEN}Found DNS servers: $HOST_DNS_SERVERS${RC}"
+    fi
+    DNS_OPTS=""
+    for ns in $HOST_DNS_SERVERS; do
+        DNS_OPTS="$DNS_OPTS --nameserver $ns"
+    done
+
+    # 3. Get next available VMID
     VMID=$(pvesh get /cluster/nextid)
     printf "%b\n" "${CYAN}Creating LXC with ID $VMID...${RC}"
 
-    # 3. Create the LXC
+    # 4. Create the LXC
+    # The shell will split DNS_OPTS into separate arguments
     pct create "$VMID" "$TEMPLATE_STORAGE:vztmpl/$TEMPLATE_FILENAME" \
         --hostname "$LXC_HOSTNAME" \
         --storage "$LXC_STORAGE" \
@@ -70,23 +85,40 @@ setup_lxc() {
         --memory "$LXC_MEMORY" \
         --swap 0 \
         --net0 name=eth0,bridge="$LXC_BRIDGE",ip=dhcp \
-        --nameserver 8.8.8.8 \
+        $DNS_OPTS \
         --unprivileged 1 \
         --features nesting=1,keyctl=1 \
         --onboot 1 \
         --start 1
 
-    printf "%b\n" "${GREEN}LXC created and started. Waiting for network...${RC}"
-    sleep 15 # Give LXC time to get an IP
+    # 5. Robustly wait for network
+    printf "%b\n" "${GREEN}LXC created. Waiting for network connectivity...${RC}"
+    ATTEMPTS=0
+    MAX_ATTEMPTS=20 # Wait for max 2 minutes (20 * 6s)
+    while [ $ATTEMPTS -lt $MAX_ATTEMPTS ]; do
+        if pct exec "$VMID" -- ping -c 1 -W 5 8.8.8.8 >/dev/null 2>&1; then
+            printf "%b\n" "${GREEN}Network is up!${RC}"
+            break
+        fi
+        ATTEMPTS=$((ATTEMPTS + 1))
+        printf "%b\n" "${CYAN}Waiting for network... (Attempt $ATTEMPTS/$MAX_ATTEMPTS)${RC}"
+        sleep 6
+    done
 
-    # 4. Install Tailscale
+    if [ $ATTEMPTS -eq $MAX_ATTEMPTS ]; then
+        printf "%b\n" "${RED}Network connectivity failed after 2 minutes. Please check your Proxmox host's network and firewall settings.${RC}"
+        printf "%b\n" "${RED}Aborting setup. You may need to destroy the failed LXC (ID: $VMID) manually.${RC}"
+        return
+    fi
+
+    # 6. Install Tailscale
     printf "%b\n" "${CYAN}Installing Tailscale inside the LXC...${RC}"
     pct exec "$VMID" -- apt update
     pct exec "$VMID" -- apt install -y curl
     pct exec "$VMID" -- sh -c "curl -fsSL https://tailscale.com/install.sh | sh"
     printf "%b\n" "${GREEN}Tailscale installed.${RC}"
 
-    # 5. Configure Tailscale to advertise routes
+    # 7. Configure Tailscale to advertise routes
     printf "%b\n" "${CYAN}Configuring Tailscale subnet router...${RC}"
     # Get all local, non-virtual subnets
     SUBNETS=$(ip -4 route show | awk '/src/ {print $1}' | paste -s -d, -)
