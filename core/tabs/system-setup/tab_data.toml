@@ -226,7 +226,7 @@ task_list = "I PFM"
 [[data]]
 name = "Proxmox Update"
 description = "This command updates your Proxmox VE system to the latest packages."
-script = "proxmox-update.sh"
+script = "proxmox/proxmox-update.sh"
 task_list = "P MP"
 multi_select = false
 
