@@ -69,7 +69,7 @@ remove_subscription_popup() {
     printf "%b\n" "${YELLOW}Removing 'No valid subscription' popup...${RC}"
     if [ -f "/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js" ]; then
         # This command injects a return statement into the function that shows the popup.
-        "$ESCALATION_TOOL" sed -Ezi.bak "s/(function ?\(orig_cmd\) \{)/\1\n\torig_cmd\(\);\n\treturn;/g" /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
+        "$ESCALATION_TOOL" sed -Ezi.bak 's/(function ?\(orig_cmd\) \{)/\1\n\torig_cmd\(\);\n\treturn;/g' /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
         "$ESCALATION_TOOL" systemctl restart pveproxy.service
         printf "%b\n" "${GREEN}Subscription popup removed.${RC}"
     else
