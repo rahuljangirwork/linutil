@@ -56,12 +56,12 @@ create_non_root_user() {
 
 enable_firewall() {
     printf "%b\n" "${YELLOW}Enabling Proxmox firewall...${RC}"
-    if command_exists pveum; then
-        "$ESCALATION_TOOL" pveum datacenter modify --firewall 1
+    if command_exists pvesh; then
+        "$ESCALATION_TOOL" pvesh set /cluster/firewall/options --enable 1
         printf "%b\n" "${GREEN}Proxmox firewall enabled at the Datacenter level.${RC}"
         printf "%b\n" "${YELLOW}WARNING: Ensure you have configured firewall rules before enabling it on VMs or hosts to avoid losing access.${RC}"
     else
-        printf "%b\n" "${RED}pveum command not found. Cannot enable firewall.${RC}"
+        printf "%b\n" "${RED}pvesh command not found. Cannot enable firewall.${RC}"
     fi
 }
 
