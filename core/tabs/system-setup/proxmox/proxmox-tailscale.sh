@@ -95,16 +95,23 @@ setup_lxc() {
 
     # Step 3: Check for Debian 12 template
     print_status "[2/9] Checking for Debian 12 template..."
-    TEMPLATE_FILENAME=$(pveam available --section system | grep "$TEMPLATE_NAME" | awk '{print $2}')
-    if ! pveam list "$TEMPLATE_STORAGE" | grep -q "$TEMPLATE_FILENAME"; then
-        print_warning "Template not found. Downloading..."
+    
+    # Get the exact template filename
+    TEMPLATE_FILENAME=$(pveam list "$TEMPLATE_STORAGE" | grep "$TEMPLATE_NAME" | grep "amd64.tar.zst" | sort -V | tail -1 | awk '{print $1}' | sed "s|${TEMPLATE_STORAGE}:vztmpl/||")
+    
+    if [ -z "$TEMPLATE_FILENAME" ]; then
+        print_warning "Template not found locally. Checking available templates..."
+        TEMPLATE_FILENAME=$(pveam available --section system | grep "$TEMPLATE_NAME" | grep "amd64.tar.zst" | sort -V | tail -1 | awk '{print $2}')
+        
         if [ -z "$TEMPLATE_FILENAME" ]; then
             print_error "Could not find a Debian 12 template. Please update your template list with 'pveam update'."
         fi
+        
+        print_warning "Downloading template: $TEMPLATE_FILENAME"
         pveam download "$TEMPLATE_STORAGE" "$TEMPLATE_FILENAME"
         success "Template downloaded."
     else
-        success "Debian 12 template found."
+        success "Debian 12 template found: $TEMPLATE_FILENAME"
     fi
 
     # Step 4: Get Host's DNS servers
@@ -150,32 +157,48 @@ setup_lxc() {
     } >> "$CONF_FILE"
     success "TUN device configured."
 
-    # Step 7: Start container and wait for network
+    # Step 7: Start container and wait for network (IMPROVED)
     print_status "[6/9] Starting LXC and waiting for network..."
     pct start "$VMID"
     
+    # Give container time to fully boot
+    print_status "Waiting 15 seconds for container to initialize..."
+    sleep 15
+    
     ATTEMPTS=0
-    MAX_ATTEMPTS=60 # Wait for max 3 minutes (60 * 3s)
+    MAX_ATTEMPTS=20 # 20 attempts x 5 seconds = 100 seconds max wait
     IP=""
+    
     while [ $ATTEMPTS -lt $MAX_ATTEMPTS ]; do
-        IP=$(pct exec "$VMID" -- ip -4 addr show eth0 | grep 'inet ' | awk '{print $2}' | cut -d/ -f1 || true)
-        if [ -n "$IP" ]; then
+        # Try to get IP using hostname -I (more reliable)
+        IP=$(pct exec "$VMID" -- hostname -I 2>/dev/null | awk '{print $1}' || true)
+        
+        # Check if we got a valid IP (not empty and not localhost)
+        if [ -n "$IP" ] && [ "$IP" != "127.0.0.1" ]; then
             print_status "Container has IP: $IP. Verifying internet connectivity..."
-            if pct exec "$VMID" -- ping -c 1 -W 5 8.8.8.8 >/dev/null 2>&1; then
-                success "Network is up!"
-                break
+            
+            # First test gateway (faster)
+            if pct exec "$VMID" -- ping -c 1 -W 3 10.0.0.10 >/dev/null 2>&1; then
+                # Gateway works, now test internet
+                if pct exec "$VMID" -- ping -c 1 -W 3 8.8.8.8 >/dev/null 2>&1; then
+                    success "Network is up!"
+                    break
+                else
+                    print_warning "Gateway reachable but internet failed. Retrying..."
+                fi
             else
-                print_warning "Container has IP, but ping failed. Retrying..."
+                print_warning "Container has IP but gateway unreachable. Waiting..."
             fi
         fi
+        
         ATTEMPTS=$((ATTEMPTS + 1))
         printf "${CYAN}Waiting for network... (Attempt $ATTEMPTS/$MAX_ATTEMPTS)${NC}\n"
-        sleep 3
+        sleep 5 # Wait 5 seconds between attempts
     done
 
     if [ $ATTEMPTS -eq $MAX_ATTEMPTS ]; then
         if [ "$net_choice" = "1" ]; then
-            print_error "Network connectivity failed. The container did not get an IP address via DHCP. Please check your network/firewall or try again with a static IP."
+            print_error "Network connectivity failed. The container did not get proper internet access via DHCP. Please check your network/firewall or try again with a static IP."
         else
             print_error "Network connectivity failed. The container has an IP but could not reach the internet. Please check your gateway and firewall settings."
         fi
@@ -183,39 +206,52 @@ setup_lxc() {
 
     # Step 8: Install and Configure Tailscale
     print_status "[7/9] Installing Tailscale inside the LXC..."
-    pct exec "$VMID" -- apt-get update
+    pct exec "$VMID" -- apt-get update -qq
     pct exec "$VMID" -- apt-get install -y curl
     pct exec "$VMID" -- sh -c "curl -fsSL https://tailscale.com/install.sh | sh"
     success "Tailscale installed."
 
     print_status "[8/9] Configuring Tailscale as a subnet router..."
-    SUBNETS=$(ip -4 route show | awk '/src/ {print $1}' | grep -v 'docker' | paste -s -d, -)
+    # Get local subnets (exclude docker networks)
+    SUBNETS=$(ip -4 route show | grep 'proto kernel' | grep -v 'docker' | awk '{print $1}' | grep -v '^default' | paste -s -d, -)
+    
     if [ -z "$SUBNETS" ]; then
-        print_error "Could not automatically determine local subnets to advertise."
+        # Fallback to your known network
+        SUBNETS="10.0.0.0/24"
+        print_warning "Could not auto-detect subnets. Using default: $SUBNETS"
     fi
     print_status "Will advertise the following subnets: $SUBNETS"
 
     pct exec "$VMID" -- tailscale up \
         --authkey="$AUTH_KEY" \
         --advertise-routes="$SUBNETS" \
-        --accept-routes
+        --accept-routes \
+        --hostname="$LXC_HOSTNAME"
     
     success "Tailscale is up and configured."
 
     # Step 9: Final Status
     print_status "[9/9] Finalizing Setup..."
-    TAILSCALE_IP=$(pct exec "$VMID" -- tailscale ip -4)
-    # If DHCP was used, the IP variable is set. If static, we need to parse it.
+    TAILSCALE_IP=$(pct exec "$VMID" -- tailscale ip -4 2>/dev/null || echo "N/A")
+    
+    # If DHCP was used, IP is already set. If static, parse it.
     if [ -z "$IP" ]; then
         IP=$(echo "$STATIC_IP" | cut -d/ -f1)
     fi
+    
     success "Setup complete! Your Tailscale Subnet Router is running."
-    echo -e "${GREEN}LXC VMID: ${YELLOW}$VMID${NC}"
-    echo -e "${GREEN}Hostname: ${YELLOW}$LXC_HOSTNAME${NC}"
-    echo -e "${GREEN}Container IP: ${YELLOW}$IP${NC}"
-    echo -e "${GREEN}Tailscale IP: ${YELLOW}$TAILSCALE_IP${NC}"
-    echo -e "${GREEN}Advertised Routes: ${YELLOW}$SUBNETS${NC}"
+    echo ""
+    echo "========================================"
+    echo "LXC VMID: $VMID"
+    echo "Hostname: $LXC_HOSTNAME"
+    echo "Container IP: $IP"
+    echo "Tailscale IP: $TAILSCALE_IP"
+    echo "Advertised Routes: $SUBNETS"
+    echo "========================================"
+    echo ""
     print_warning "IMPORTANT: Remember to approve the advertised routes in the Tailscale admin console!"
+    printf "\n${CYAN}Visit: https://login.tailscale.com/admin/machines${NC}\n"
+    printf "${CYAN}Find your device '$LXC_HOSTNAME' and approve the subnet routes.${NC}\n\n"
 }
 
 destroy_lxc() {
@@ -269,7 +305,6 @@ check_status() {
     pct exec "$VMID" -- tailscale status
 }
 
-
 # --- Main Loop ---
 
 # Check for dependencies
@@ -281,7 +316,6 @@ fi
 if [ "$(id -u)" -ne 0 ]; then
   print_error "This script must be run as root."
 fi
-
 
 while true; do
     show_menu
