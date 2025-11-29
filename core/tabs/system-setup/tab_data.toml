@@ -244,3 +244,10 @@ description = "This script automates the essential post-installation tasks for a
 script = "proxmox/proxmox-post-install.sh"
 task_list = "P MP FM I"
 multi_select = false
+
+[[data.entries]]
+name = "Proxmox Tailscale Manager"
+description = "A menu-driven script to set up and manage a Tailscale subnet router in an LXC container."
+script = "proxmox/proxmox-tailscale.sh"
+task_list = "P I FM"
+multi_select = false
