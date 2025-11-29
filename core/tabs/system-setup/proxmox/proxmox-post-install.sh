@@ -65,17 +65,7 @@ enable_firewall() {
     fi
 }
 
-remove_subscription_popup() {
-    printf "%b\n" "${YELLOW}Removing 'No valid subscription' popup...${RC}"
-    if [ -f "/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js" ]; then
-        # This command injects a return statement into the function that shows the popup.
-        "$ESCALATION_TOOL" sed -Ezi.bak 's/(function ?\(orig_cmd\) \{)/\1\n\torig_cmd\(\);\n\treturn;/g' /usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js
-        "$ESCALATION_TOOL" systemctl restart pveproxy.service
-        printf "%b\n" "${GREEN}Subscription popup removed.${RC}"
-    else
-        printf "%b\n" "${RED}Could not find proxmoxlib.js, skipping.${RC}"
-    fi
-}
+
 
 install_useful_tools() {
     printf "%b\n" "${YELLOW}Installing useful tools (htop, ncdu, vim, git)...${RC}"
@@ -95,7 +85,6 @@ update_system
 install_fail2ban
 create_non_root_user
 enable_firewall
-remove_subscription_popup
 install_useful_tools
 
 printf "%b\n" "${GREEN}Proxmox post-installation script finished!${RC}"
