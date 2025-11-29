@@ -43,8 +43,9 @@ create_non_root_user() {
         printf "%b\n" "${CYAN}User '$username' already exists. Skipping creation.${RC}"
     else
         printf "Creating user '$username'...\n"
-        "$ESCALATION_TOOL" adduser --disabled-password --gecos "" "$username"
-        printf "%b\n" "${YELLOW}User '$username' created without a password.${RC}"
+        # Using useradd for more robust non-interactive creation
+        "$ESCALATION_TOOL" useradd --create-home --shell /bin/bash "$username"
+        printf "%b\n" "${YELLOW}User '$username' created.${RC}"
         printf "%b\n" "${YELLOW}Please set a password for this user by running 'passwd $username' in the terminal.${RC}"
     fi
 
