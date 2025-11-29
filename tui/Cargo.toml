@@ -1,11 +1,12 @@
 [package]
 name = "linutil_tui"
-description = "Rahul Tech's Linux Toolbox - Linutil is a distro-agnostic toolbox designed to simplify everyday Linux tasks."
-documentation = "https://christitustech.github.io/linutil"
+description = "Rahul's Linux Toolbox - Linutil is a distro-agnostic toolbox designed to simplify everyday Linux tasks."
+documentation = "https://rahuljangirwork.github.io/linutil"
 readme = "../README.md"
 edition = "2021"
 license.workspace = true
-repository = "https://github.com/ChrisTitusTech/linutil/tree/main/tui"
+authors = ["Rahul"]
+repository = "https://github.com/rahuljangirwork/linutil/tree/main/tui"
 version.workspace = true
 include = ["src/*.rs", "Cargo.toml", "cool_tips.txt", "../man/linutil.1"]
 

@@ -7,7 +7,7 @@ RED='\033[0;31m'
 
 # Function to fetch the latest release tag from the GitHub API
 get_latest_release() {
-  latest_release=$(curl -s https://api.github.com/repos/ChrisTitusTech/linutil/releases | 
+  latest_release=$(curl -s https://api.github.com/repos/rahuljangirwork/linutil/releases | 
     grep "tag_name" | 
     head -n 1 | 
     sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
