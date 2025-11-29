@@ -1,7 +1,7 @@
 #!/bin/sh -e
 
 # Source common functions and variables
-. ../../tabs/common-script.sh
+. ../../common-script.sh
 
 # --- Helper Functions (as a fallback if not in common-script.sh) ---
 if ! command -v print_status >/dev/null; then
