@@ -62,8 +62,39 @@ setup_lxc() {
         print_error "Auth Key cannot be empty. Aborting."
     fi
 
-    # Step 2: Check for Debian 12 template
-    print_status "[1/8] Checking for Debian 12 template..."
+    # Step 2: Choose network type
+    print_status "[1/9] Configuring Network..."
+    printf "Choose network type:\n"
+    printf "  1) DHCP (automatic, recommended)\n"
+    printf "  2) Static IP\n"
+    printf "Your choice: "
+    read -r net_choice
+
+    NET_OPTS=""
+    case "$net_choice" in
+        1)
+            print_status "Using DHCP."
+            NET_OPTS="ip=dhcp"
+            ;;
+        2)
+            print_status "Using Static IP."
+            printf "Enter Static IP address (e.g., 192.168.1.50/24): "
+            read -r STATIC_IP
+            if [ -z "$STATIC_IP" ]; then print_error "Static IP cannot be empty."; fi
+            
+            printf "Enter Gateway IP address (e.g., 192.168.1.1): "
+            read -r GATEWAY_IP
+            if [ -z "$GATEWAY_IP" ]; then print_error "Gateway IP cannot be empty."; fi
+
+            NET_OPTS="ip=${STATIC_IP},gw=${GATEWAY_IP}"
+            ;;
+        *)
+            print_error "Invalid choice. Aborting."
+            ;;
+    esac
+
+    # Step 3: Check for Debian 12 template
+    print_status "[2/9] Checking for Debian 12 template..."
     TEMPLATE_FILENAME=$(pveam available --section system | grep "$TEMPLATE_NAME" | awk '{print $2}')
     if ! pveam list "$TEMPLATE_STORAGE" | grep -q "$TEMPLATE_FILENAME"; then
         print_warning "Template not found. Downloading..."
@@ -76,8 +107,8 @@ setup_lxc() {
         success "Debian 12 template found."
     fi
 
-    # Step 3: Get Host's DNS servers
-    print_status "[2/8] Detecting host's DNS servers..."
+    # Step 4: Get Host's DNS servers
+    print_status "[3/9] Detecting host's DNS servers..."
     HOST_DNS_SERVERS=$(grep '^nameserver' /etc/resolv.conf | awk '{print $2}')
     if [ -z "$HOST_DNS_SERVERS" ]; then
         print_warning "Could not detect host DNS servers. Falling back to 8.8.8.8."
@@ -90,16 +121,16 @@ setup_lxc() {
         DNS_OPTS="$DNS_OPTS --nameserver $ns"
     done
 
-    # Step 4: Create the LXC (but don't start it yet)
+    # Step 5: Create the LXC (but don't start it yet)
     VMID=$(pvesh get /cluster/nextid)
-    print_status "[3/8] Creating LXC with ID $VMID..."
+    print_status "[4/9] Creating LXC with ID $VMID..."
     pct create "$VMID" "$TEMPLATE_STORAGE:vztmpl/$TEMPLATE_FILENAME" \
         --hostname "$LXC_HOSTNAME" \
         --storage "$LXC_STORAGE" \
         --cores "$LXC_CORES" \
         --memory "$LXC_MEMORY" \
         --swap 0 \
-        --net0 name=eth0,bridge="$LXC_BRIDGE",ip=dhcp \
+        --net0 name=eth0,bridge="$LXC_BRIDGE",${NET_OPTS} \
         $DNS_OPTS \
         --unprivileged 1 \
         --features nesting=1,keyctl=1 \
@@ -108,8 +139,8 @@ setup_lxc() {
 
     success "LXC created. Now configuring for Tailscale."
 
-    # Step 5: Apply LXC Configuration for TUN device
-    print_status "[4/8] Applying LXC Configuration for TUN device..."
+    # Step 6: Apply LXC Configuration for TUN device
+    print_status "[5/9] Applying LXC Configuration for TUN device..."
     CONF_FILE="/etc/pve/lxc/${VMID}.conf"
     {
         echo ""
@@ -119,15 +150,14 @@ setup_lxc() {
     } >> "$CONF_FILE"
     success "TUN device configured."
 
-    # Step 6: Start container and wait for network
-    print_status "[5/8] Starting LXC and waiting for network..."
+    # Step 7: Start container and wait for network
+    print_status "[6/9] Starting LXC and waiting for network..."
     pct start "$VMID"
     
     ATTEMPTS=0
     MAX_ATTEMPTS=60 # Wait for max 3 minutes (60 * 3s)
     IP=""
     while [ $ATTEMPTS -lt $MAX_ATTEMPTS ]; do
-        # Use a more portable command to get the IP
         IP=$(pct exec "$VMID" -- ip -4 addr show eth0 | grep 'inet ' | awk '{print $2}' | cut -d/ -f1 || true)
         if [ -n "$IP" ]; then
             print_status "Container has IP: $IP. Verifying internet connectivity..."
@@ -144,17 +174,21 @@ setup_lxc() {
     done
 
     if [ $ATTEMPTS -eq $MAX_ATTEMPTS ]; then
-        print_error "Network connectivity failed after 3 minutes. Please check your Proxmox host's network and firewall settings."
+        if [ "$net_choice" = "1" ]; then
+            print_error "Network connectivity failed. The container did not get an IP address via DHCP. Please check your network/firewall or try again with a static IP."
+        else
+            print_error "Network connectivity failed. The container has an IP but could not reach the internet. Please check your gateway and firewall settings."
+        fi
     fi
 
-    # Step 7: Install and Configure Tailscale
-    print_status "[6/8] Installing Tailscale inside the LXC..."
+    # Step 8: Install and Configure Tailscale
+    print_status "[7/9] Installing Tailscale inside the LXC..."
     pct exec "$VMID" -- apt-get update
     pct exec "$VMID" -- apt-get install -y curl
     pct exec "$VMID" -- sh -c "curl -fsSL https://tailscale.com/install.sh | sh"
     success "Tailscale installed."
 
-    print_status "[7/8] Configuring Tailscale as a subnet router..."
+    print_status "[8/9] Configuring Tailscale as a subnet router..."
     SUBNETS=$(ip -4 route show | awk '/src/ {print $1}' | grep -v 'docker' | paste -s -d, -)
     if [ -z "$SUBNETS" ]; then
         print_error "Could not automatically determine local subnets to advertise."
@@ -168,13 +202,17 @@ setup_lxc() {
     
     success "Tailscale is up and configured."
 
-    # Step 8: Final Status
-    print_status "[8/8] Finalizing Setup..."
+    # Step 9: Final Status
+    print_status "[9/9] Finalizing Setup..."
     TAILSCALE_IP=$(pct exec "$VMID" -- tailscale ip -4)
+    # If DHCP was used, the IP variable is set. If static, we need to parse it.
+    if [ -z "$IP" ]; then
+        IP=$(echo "$STATIC_IP" | cut -d/ -f1)
+    fi
     success "Setup complete! Your Tailscale Subnet Router is running."
     echo -e "${GREEN}LXC VMID: ${YELLOW}$VMID${NC}"
     echo -e "${GREEN}Hostname: ${YELLOW}$LXC_HOSTNAME${NC}"
-    echo -e "${GREEN}DHCP IP: ${YELLOW}$IP${NC}"
+    echo -e "${GREEN}Container IP: ${YELLOW}$IP${NC}"
     echo -e "${GREEN}Tailscale IP: ${YELLOW}$TAILSCALE_IP${NC}"
     echo -e "${GREEN}Advertised Routes: ${YELLOW}$SUBNETS${NC}"
     print_warning "IMPORTANT: Remember to approve the advertised routes in the Tailscale admin console!"
@@ -252,25 +290,25 @@ while true; do
     case "$choice" in
         1)
             setup_lxc
-            ;; 
+            ;;
         2)
             destroy_lxc
-            ;; 
+            ;;
         3)
             view_logs
-            ;; 
+            ;;
         4)
             enter_lxc
-            ;; 
+            ;;
         5)
             check_status
-            ;; 
+            ;;
         q|Q)
             printf "%b\n" "${GREEN}Exiting.${NC}"
             exit 0
-            ;; 
+            ;;
         *)
             printf "%b\n" "${RED}Invalid option, please try again.${NC}"
-            ;; 
+            ;;
     esac
 done
