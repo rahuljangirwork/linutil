@@ -114,7 +114,7 @@ impl AppState {
             .iter()
             .map(|tab| tab.name.len() + args.theme.tab_icon().len())
             .max()
-            .unwrap_or(22) as u16; // 22 is the length of "Linutil by Chris Titus" title
+            .unwrap_or(13) as u16; // 13 is the length of "rahul scripts" title
 
         let mut state = Self {
             areas: None,
@@ -306,8 +306,7 @@ impl AppState {
         });
 
         let label = Paragraph::new(Line::from(vec![
-            Span::styled("Linutil ", Style::default().bold()),
-            Span::styled("by Chris Titus", Style::default().italic()),
+            Span::styled("rahul scripts", Style::default().bold()),
         ]))
         .block(label_block)
         .centered();
