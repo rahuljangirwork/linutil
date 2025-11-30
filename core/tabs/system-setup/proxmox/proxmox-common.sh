@@ -63,26 +63,37 @@ check_storage() {
 # Finds a storage path by parsing /etc/pve/storage.cfg
 get_storage_path() {
     local storage_name=$1
-    local path
-    # Awk script to find the storage block and print its path
-    path=$(awk -v storage="$storage_name" '
-        BEGIN { in_block=0 }
-        # Match "dir: local", "nfs: backup", etc.
-        $1 ~ /:$/ && $2 == storage {
+    local in_block=0
+    local line
+
+    # Ensure config file is readable, silently fail if not.
+    if [[ ! -r "/etc/pve/storage.cfg" ]]; then
+        return
+    fi
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Trim leading whitespace to handle indented lines
+        line_trimmed="${line#"${line%%[![:space:]]*}"}"
+
+        # Check for the start of the correct storage block (e.g., "dir: local")
+        if [[ "$line_trimmed" =~ ^[a-z]+:[[:space:]]+${storage_name}$ ]]; then
             in_block=1
-            next
-        }
-        # Match any other block start, turn off in_block
-        $1 ~ /:$/ && $2 != storage {
-            in_block=0
-        }
-        # If we are in the correct block, find the path
-        in_block && /^\s*path\s+/ {
-            print $2
-            exit
-        }
-    ' /etc/pve/storage.cfg)
-    echo "$path"
+            continue
+        fi
+
+        # Check for the start of any other storage block to exit the current one
+        if [[ $in_block -eq 1 ]] && [[ "$line_trimmed" =~ ^[a-z]+: ]]; then
+            break
+        fi
+
+        # If we are in the correct block, look for the path property
+        if [[ $in_block -eq 1 ]] && [[ "$line_trimmed" =~ ^path[[:space:]]+(.+)$ ]]; then
+            # Path found, print it (removing trailing whitespace) and exit
+            local path_found="${BASH_REMATCH[1]}"
+            echo "${path_found%"${path_found##*[![:space:]]}"}"
+            return 0
+        fi
+    done < /etc/pve/storage.cfg
 }
 
 
