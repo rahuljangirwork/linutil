@@ -20,8 +20,9 @@ show_menu() {
     echo "===================================="
     echo "1. Run Proxmox Pre-flight Check"
     echo "2. Create a new LXC Container"
-    echo "3. Create a new VM"
-    echo "4. Exit"
+    echo "3. Create Tailscale Subnet Router"
+    echo "4. Create a new VM"
+    echo "5. Exit"
     echo "===================================="
     echo -n "Please choose an option: "
 }
@@ -43,10 +44,13 @@ main() {
                 bash "$(dirname "$0")/create-lxc.sh"
                 ;;
             3)
+                bash "$(dirname "$0")/create-tailscale-router.sh"
+                ;;
+            4)
                 print_warning "VM creation script is not yet implemented."
                 # Will later call: "$(dirname "$0")/create-vm.sh"
                 ;;
-            4)
+            5)
                 echo "Exiting Proxmox Manager."
                 exit 0
                 ;;
