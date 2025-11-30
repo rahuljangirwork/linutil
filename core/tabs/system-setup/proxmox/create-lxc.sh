@@ -93,13 +93,21 @@ done
     # --- Gather Container Details ---
     print_header "Container Configuration"
     read -p "Enter Hostname: " hostname
+    echo -e "${COLOR_YELLOW}Note: The root password must be at least 5 characters long.${COLOR_NC}"
     while true; do
         read -s -p "Enter root password: " password
         echo
         read -s -p "Confirm root password: " password2
         echo
-        [ "$password" = "$password2" ] && break
-        print_error "Passwords do not match. Please try again."
+        if [ "$password" != "$password2" ]; then
+            print_error "Passwords do not match. Please try again."
+            continue
+        fi
+        if [ ${#password} -lt 5 ]; then
+            print_error "Password must be at least 5 characters long. Please try again."
+            continue
+        fi
+        break
     done
     read -p "Tags (optional, comma-separated): " tags
     read -p "Description (optional): " description
