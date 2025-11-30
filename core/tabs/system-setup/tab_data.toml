@@ -251,3 +251,10 @@ description = "A menu-driven script to set up and manage a Tailscale subnet rout
 script = "proxmox/proxmox-tailscale.sh"
 task_list = "P I FM"
 multi_select = false
+
+[[data.entries]]
+name = "AdGuard-Tailscale Setup"
+description = "Deploy an LXC container on Proxmox with AdGuard Home and Tailscale for network-wide DNS filtering"
+script = "proxmox/adguard-tailscale-setup.sh"
+task_list = "P I FM"
+multi_select = false
