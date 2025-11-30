@@ -40,8 +40,7 @@ main() {
                 bash "$(dirname "$0")/proxmox-preflight-check.sh"
                 ;;
             2)
-                print_warning "LXC creation script is not yet implemented."
-                # Will later call: "$(dirname "$0")/create-lxc.sh"
+                bash "$(dirname "$0")/create-lxc.sh"
                 ;;
             3)
                 print_warning "VM creation script is not yet implemented."
