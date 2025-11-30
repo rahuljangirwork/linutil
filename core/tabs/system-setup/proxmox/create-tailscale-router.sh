@@ -129,8 +129,27 @@ main() {
     fi
     print_success "Tailscale installed."
 
-    # --- Bring Tailscale Up ---
-    print_header "4. Configuring Tailscale..."
+    # --- Wait for Tailscaled to be ready ---
+    print_header "4. Waiting for Tailscale daemon..."
+    local wait_time=0
+    local max_wait=30
+    while [ $wait_time -lt $max_wait ]; do
+        if "$ESCALATION_TOOL" pct exec "$VMID" -- test -S /var/run/tailscale/tailscaled.sock; then
+            print_success "Tailscale daemon is ready."
+            break
+        fi
+        sleep 2
+        echo "Still waiting for tailscaled.sock... (${wait_time}s / ${max_wait}s)"
+        wait_time=$((wait_time + 2))
+    done
+
+    if [ $wait_time -ge $max_wait ]; then
+        print_error "Tailscale daemon did not start in time. Aborting."
+        exit 1
+    fi
+
+    # --- Configure Tailscale ---
+    print_header "5. Configuring Tailscale..."
     local tailscale_up_cmd="tailscale up --authkey=\"${TS_AUTHKEY}\" --advertise-routes=\"${SUBNET_TO_ADVERTISE}\" --accept-routes"
     if ! "$ESCALATION_TOOL" pct exec "$VMID" -- $tailscale_up_cmd; then
         print_error "Failed to run 'tailscale up'. You may need to log in manually."
