@@ -160,7 +160,7 @@ done
 
     # --- Create Container ---
     print_header "Creating LXC Container..."
-    local cmd="sudo pct create $vmid \"$template_volid\" --rootfs \"$rootfs\" --hostname \"$hostname\" --password \"$password\" --memory $memory --swap $swap --cores $cores --net0 \"$net0\" --onboot $onboot_val"
+    local cmd="$ESCALATION_TOOL pct create $vmid \"$template_volid\" --rootfs \"$rootfs\" --hostname \"$hostname\" --password \"$password\" --memory $memory --swap $swap --cores $cores --net0 \"$net0\" --onboot $onboot_val"
     [ -n "$tags" ] && cmd+=" --tags \"$tags\""
     [ -n "$description" ] && cmd+=" --description \"$description\""
 

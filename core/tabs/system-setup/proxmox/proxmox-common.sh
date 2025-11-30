@@ -9,6 +9,9 @@
 # Proxmox versions.
 # ==============================================================================
 
+# --- Source main common script ---
+source "$(dirname "$0")/../../common-script.sh"
+
 # --- Color Codes for Output ---
 COLOR_GREEN='\033[0;32m'
 COLOR_RED='\033[0;31m'
@@ -208,3 +211,4 @@ check_hw_virtualization() {
 
 # --- Run dependency check immediately when sourced ---
 check_dependencies
+checkEscalationTool
