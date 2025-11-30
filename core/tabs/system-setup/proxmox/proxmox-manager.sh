@@ -37,7 +37,7 @@ main() {
         case $choice in
             1)
                 # Run the pre-flight check script
-                "$(dirname "$0")/proxmox-preflight-check.sh"
+                bash "$(dirname "$0")/proxmox-preflight-check.sh"
                 ;;
             2)
                 print_warning "LXC creation script is not yet implemented."
