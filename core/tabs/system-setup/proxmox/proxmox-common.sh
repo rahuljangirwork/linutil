@@ -43,22 +43,20 @@ print_warning() { echo -e "${COLOR_YELLOW}⚠️ $1${COLOR_NC}"; }
 # Checks for available storage pools and their status.
 check_storage() {
     print_header "Storage Pool Status"
-    local active_found=false
-    # Use tail to skip header, then awk to parse space-delimited table
-    pvesm status | tail -n +2 | while read -r name type status total avail percent; do
-        if [[ "$status" == "active" ]]; then
-            active_found=true
-            # Proxmox CLI returns bytes, so we format them
-            total_fmt=$(numfmt --to=iec-i --suffix=B --format="%.1f" "$total")
-            avail_fmt=$(numfmt --to=iec-i --suffix=B --format="%.1f" "$avail")
-            print_success "Storage '${name}' (${type}) is active. Space: ${avail_fmt} / ${total_fmt}"
-        fi
-    done
+    local active_pools
+    active_pools=$(pvesm status | tail -n +2 | grep 'active' || true)
 
-    if ! $active_found; then
+    if [[ -z "$active_pools" ]]; then
         print_error "No active storage pools found."
         return 1
     fi
+
+    echo "$active_pools" | while read -r name type status total avail percent; do
+        # Proxmox CLI returns bytes, so we format them
+        total_fmt=$(numfmt --to=iec-i --suffix=B --format="%.1f" "$total")
+        avail_fmt=$(numfmt --to=iec-i --suffix=B --format="%.1f" "$avail")
+        print_success "Storage '${name}' (${type}) is active. Space: ${avail_fmt} / ${total_fmt}"
+    done
     return 0
 }
 
@@ -67,10 +65,10 @@ get_storage_path() {
     local storage_name=$1
     local path
     # Awk script to find the storage block and print its path
-    path=$(awk -v storage="$storage_name" ' 
-        $0 == storage { in_block=1 }
-        in_block && /path/ { print $2; exit }
-        /^[a-z]+:/ { if(in_block) exit; }
+    path=$(awk -v storage="$storage_name" '
+        $1 ~ /:$/ && $2 == storage { in_block=1; next }
+        in_block && /^\s*path\s+/ { print $2; exit }
+        in_block && /:$/ { exit }
     ' /etc/pve/storage.cfg)
     echo "$path"
 }
@@ -91,7 +89,7 @@ check_lxc_templates() {
 
     # pveam list output is a table, skip header and get the 'Volid' column
     local templates
-    templates=$(pveam list "$template_storage" | tail -n +2 | awk '{print $NF}')
+    templates=$(pveam list "$template_storage" | tail -n +2 | awk '{print $1}' | sed 's#.*/##')
     if [[ -z "$templates" ]]; then
         print_warning "No LXC templates found in storage '$template_storage'."
         print_warning "Use 'pveam download $template_storage <template-name>' to add some."
