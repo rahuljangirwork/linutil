@@ -83,6 +83,23 @@ main() {
         exit 1
     fi
 
+    # --- Check for existing container and destroy it for idempotency ---
+    print_header "0. Cleaning up previous deployment..."
+    # Check if the CT exists by checking its status. Redirect errors to /dev/null.
+    if "$ESCALATION_TOOL" pct status "$VMID" >/dev/null 2>&1; then
+        echo -e "${COLOR_YELLOW}Container ${VMID} already exists. Stopping and destroying it for a clean deployment...${COLOR_NC}"
+        # Stop the container first (ignore errors if it's already stopped)
+        "$ESCALATION_TOOL" pct stop "$VMID" --force || true
+        # Destroy and purge the container
+        if ! "$ESCALATION_TOOL" pct destroy "$VMID" --force --purge; then
+            print_error "Failed to destroy existing container ${VMID}. Aborting."
+            exit 1
+        fi
+        print_success "Existing container destroyed."
+    else
+        echo "No previous installation found. Proceeding with creation."
+    fi
+
     # --- Create Container ---
     print_header "1. Creating LXC Container (ID: ${VMID})..."
     local cmd_array=()
