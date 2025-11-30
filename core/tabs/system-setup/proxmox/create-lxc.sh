@@ -160,15 +160,32 @@ done
 
     # --- Create Container ---
     print_header "Creating LXC Container..."
-    local cmd="$ESCALATION_TOOL pct create $vmid \"$template_volid\" --rootfs \"$rootfs\" --hostname \"$hostname\" --password \"$password\" --memory $memory --swap $swap --cores $cores --net0 \"$net0\" --onboot $onboot_val"
-    [ -n "$tags" ] && cmd+=" --tags \"$tags\""
-    [ -n "$description" ] && cmd+=" --description \"$description\""
+
+    # Build the command in an array for robust argument handling
+    local cmd_array=()
+    cmd_array+=("$ESCALATION_TOOL" "pct" "create" "$vmid" "$template_volid")
+    cmd_array+=("--rootfs" "$rootfs")
+    cmd_array+=("--hostname" "$hostname")
+    cmd_array+=("--password" "$password")
+    cmd_array+=("--memory" "$memory")
+    cmd_array+=("--swap" "$swap")
+    cmd_array+=("--cores" "$cores")
+    cmd_array+=("--net0" "$net0")
+    cmd_array+=("--onboot" "$onboot_val")
+    
+    if [[ -n "$tags" ]]; then
+        cmd_array+=("--tags" "$tags")
+    fi
+    if [[ -n "$description" ]]; then
+        cmd_array+=("--description" "$description")
+    fi
 
     echo "Running command:"
-    echo -e "${COLOR_BLUE}$cmd${COLOR_NC}"
+    # Print the command in a readable format
+    echo -e "${COLOR_BLUE}${cmd_array[*]}${COLOR_NC}"
     
     # Execute the command
-    if eval "$cmd"; then
+    if "${cmd_array[@]}"; then
         print_success "Container $vmid created successfully!"
     else
         print_error "Failed to create container $vmid."
