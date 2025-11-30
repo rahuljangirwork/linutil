@@ -163,7 +163,7 @@ done
 
     # Build the command in an array for robust argument handling
     local cmd_array=()
-    cmd_array+=("$ESCALATION_TOOL" "pct" "create" "$vmid" "$template_volid")
+    cmd_array+=("pct" "create" "$vmid" "$template_volid")
     cmd_array+=("--rootfs" "$rootfs")
     cmd_array+=("--hostname" "$hostname")
     cmd_array+=("--password" "$password")
@@ -178,6 +178,11 @@ done
     fi
     if [[ -n "$description" ]]; then
         cmd_array+=("--description" "$description")
+    fi
+
+    # Prepend escalation tool only if not running as root (i.e., tool is not 'eval')
+    if [[ "$ESCALATION_TOOL" != "eval" ]]; then
+        cmd_array=("$ESCALATION_TOOL" "${cmd_array[@]}")
     fi
 
     echo "Running command:"
