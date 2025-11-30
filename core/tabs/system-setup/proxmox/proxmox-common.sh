@@ -66,9 +66,21 @@ get_storage_path() {
     local path
     # Awk script to find the storage block and print its path
     path=$(awk -v storage="$storage_name" '
-        $1 ~ /:$/ && $2 == storage { in_block=1; next }
-        in_block && /^\s*path\s+/ { print $2; exit }
-        in_block && /:$/ { exit }
+        BEGIN { in_block=0 }
+        # Match "dir: local", "nfs: backup", etc.
+        $1 ~ /:$/ && $2 == storage {
+            in_block=1
+            next
+        }
+        # Match any other block start, turn off in_block
+        $1 ~ /:$/ && $2 != storage {
+            in_block=0
+        }
+        # If we are in the correct block, find the path
+        in_block && /^\s*path\s+/ {
+            print $2
+            exit
+        }
     ' /etc/pve/storage.cfg)
     echo "$path"
 }
