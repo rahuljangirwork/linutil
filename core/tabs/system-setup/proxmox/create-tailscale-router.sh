@@ -125,6 +125,18 @@ main() {
     fi
     print_success "Container created."
 
+    # --- Configure TUN device access ---
+    print_header "1.5. Configuring TUN device access..."
+    local lxc_conf_path="/etc/pve/lxc/${VMID}.conf"
+    local tun_config=$'\nlxc.cgroup2.devices.allow: c 10:200 rwm\nlxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file'
+    
+    if echo "$tun_config" | "$ESCALATION_TOOL" tee -a "$lxc_conf_path" >/dev/null; then
+        print_success "TUN device configured."
+    else
+        print_error "Failed to write TUN config to ${lxc_conf_path}. Aborting."
+        exit 1
+    fi
+
     # --- Start Container ---
     print_header "2. Starting Container..."
     if ! "$ESCALATION_TOOL" pct start "$VMID"; then
