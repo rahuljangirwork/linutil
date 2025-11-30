@@ -120,9 +120,9 @@ main() {
     print_success "Container started."
 
     # --- Install Tailscale ---
-    print_header "3. Installing Tailscale..."
-    echo -e "${COLOR_YELLOW}Note: The official Tailscale install script will run 'apt update'.${COLOR_NC}"
-    local install_cmd="bash -c \"curl -fsSL https://tailscale.com/install.sh | sh\""
+    print_header "3. Installing Dependencies and Tailscale..."
+    echo -e "${COLOR_YELLOW}Note: This will run 'apt update' and install 'curl' before running the Tailscale installer.${COLOR_NC}"
+    local install_cmd="bash -c 'set -e; apt-get update && apt-get install -y curl && curl -fsSL https://tailscale.com/install.sh | sh'"
     if ! "$ESCALATION_TOOL" pct exec "$VMID" -- $install_cmd; then
         print_error "Failed to install Tailscale inside the container. Aborting."
         exit 1
