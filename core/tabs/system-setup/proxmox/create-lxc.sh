@@ -11,21 +11,51 @@ source "$(dirname "$0")/proxmox-common.sh"
 
 # --- Helper Functions ---
 get_lxc_templates() {
-    # Find all storages that allow 'vztmpl'
-    local storages
-    mapfile -t storages < <(grep -B 2 'content .*vztmpl' /etc/pve/storage.cfg | grep -E 'dir:|nfs:|cifs:' | awk '{print $2}')
-    if [ ${#storages[@]} -eq 0 ]; then return; fi
+    local storages_with_vztmpl=()
+    local all_storages
+    # Get all active storage names from pvesm
+    mapfile -t all_storages < <(pvesm status | tail -n +2 | awk '{print $1}')
 
-    for storage in "${storages[@]}"; do
-        # For each storage, list templates and return the full VolID
+    # For each storage, robustly check its content type from the config file
+    for storage in "${all_storages[@]}"; do
+        # Use awk to extract the entire block for the given storage
+        local storage_block
+        storage_block=$(awk -v s="$storage" '/^[a-z]+: *s$/{p=1} p&&/^[a-z]+:/{p=0} p' /etc/pve/storage.cfg)
+
+        # Check if the extracted block has the 'vztmpl' content type
+        if echo "$storage_block" | grep -q 'content .*vztmpl'; then
+            storages_with_vztmpl+=("$storage")
+        fi
+    done
+
+    if [ ${#storages_with_vztmpl[@]} -eq 0 ]; then return; fi
+
+    for storage in "${storages_with_vztmpl[@]}"; do
+        # For each valid storage, list templates and return the full VolID
         pveam list "$storage" | tail -n +2 | awk '{print $1}'
     done
 }
 
 get_rootfs_storage() {
-    # Find storage that allows 'rootdir' (for LXC file-based) or 'images' (for block-based)
-    grep -B 2 'content .*rootdir' /etc/pve/storage.cfg | grep 'dir:||lvmthin:|zfspool:' | awk '{print $2}'
-    grep -B 2 'content .*images' /etc/pve/storage.cfg | grep 'dir:||lvmthin:|zfspool:' | awk '{print $2}'
+    local storages_with_rootfs=()
+    local all_storages
+    # Get all active storage names from pvesm
+    mapfile -t all_storages < <(pvesm status | tail -n +2 | awk '{print $1}')
+
+    # For each storage, robustly check its content type from the config file
+    for storage in "${all_storages[@]}"; do
+        # Use awk to extract the entire block for the given storage
+        local storage_block
+        storage_block=$(awk -v s="$storage" '/^[a-z]+: *s$/{p=1} p&&/^[a-z]+:/{p=0} p' /etc/pve/storage.cfg)
+
+        # Check if the extracted block has 'rootdir' or 'images'
+        if echo "$storage_block" | grep -q -E 'content .*(rootdir|images)'; then
+            storages_with_rootfs+=("$storage")
+        fi
+    done
+    
+    # Print the unique list of found storages
+    printf "%s\n" "${storages_with_rootfs[@]}"
 }
 
 # --- Main Logic ---
