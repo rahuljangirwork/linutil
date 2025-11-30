@@ -11,17 +11,21 @@ source "$(dirname "$0")/proxmox-common.sh"
 
 # --- Helper Functions ---
 get_lxc_templates() {
-    local template_storage
-    template_storage=$(grep -B 2 'content .*vztmpl' /etc/pve/storage.cfg | grep -E 'dir:|nfs:|cifs:' | head -n 1 | awk '{print $2}')
-    if [[ -z "$template_storage" ]]; then
-        return
-    fi
-    pveam list "$template_storage" | tail -n +2 | awk '{print $1}' | sed 's#.*/##'
+    # Find all storages that allow 'vztmpl'
+    local storages
+    mapfile -t storages < <(grep -B 2 'content .*vztmpl' /etc/pve/storage.cfg | grep -E 'dir:|nfs:|cifs:' | awk '{print $2}')
+    if [ ${#storages[@]} -eq 0 ]; then return; fi
+
+    for storage in "${storages[@]}"; do
+        # For each storage, list templates and return the full VolID
+        pveam list "$storage" | tail -n +2 | awk '{print $1}'
+    done
 }
 
 get_rootfs_storage() {
-    # Find storage that allows 'rootdir' (for LXC root disks)
+    # Find storage that allows 'rootdir' (for LXC file-based) or 'images' (for block-based)
     grep -B 2 'content .*rootdir' /etc/pve/storage.cfg | grep 'dir:||lvmthin:|zfspool:' | awk '{print $2}'
+    grep -B 2 'content .*images' /etc/pve/storage.cfg | grep 'dir:||lvmthin:|zfspool:' | awk '{print $2}'
 }
 
 # --- Main Logic ---
@@ -40,25 +44,36 @@ main() {
 
     # --- Select Template ---
     print_header "Select a Template"
-    mapfile -t templates < <(get_lxc_templates)
-    if [ ${#templates[@]} -eq 0 ]; then
+    mapfile -t template_volids < <(get_lxc_templates)
+    if [ ${#template_volids[@]} -eq 0 ]; then
         print_error "No LXC templates found. Please download some first."
         return 1
     fi
-    select template in "${templates[@]}"; do
-        if [[ -n "$template" ]]; then
-            # Need to find the storage for the selected template
-            template_storage=$(pveam list | grep "$template" | awk '{print $1}' | cut -d':' -f1)
-            template_volid="${template_storage}:vztmpl/${template}"
+    
+    # Create a clean list for the user to see
+    local template_display_names=()
+    for volid in "${template_volids[@]}"; do
+        template_display_names+=("$(echo "$volid" | sed 's#.*/##')")
+    done
+
+    select template_display_name in "${template_display_names[@]}"; do
+        if [[ -n "$template_display_name" ]]; then
+            # Find the original volid corresponding to the selected display name
+            for volid in "${template_volids[@]}"; do
+                if [[ "$volid" == *"$template_display_name" ]]; then
+                    template_volid="$volid"
+                    break
+                fi
+            done
             break
         else
             print_error "Invalid selection."
         fi
-done
+    done
 
     # --- Select Storage for Root Filesystem ---
     print_header "Select Storage for Root Disk"
-    mapfile -t storages < <(get_rootfs_storage)
+    mapfile -t storages < <(get_rootfs_storage | sort -u)
     if [ ${#storages[@]} -eq 0 ]; then
         print_error "No suitable storage for LXC root disks found."
         return 1
