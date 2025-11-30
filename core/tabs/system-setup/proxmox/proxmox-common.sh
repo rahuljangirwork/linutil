@@ -1,13 +1,12 @@
 #!/bin/bash
 
 # ==============================================================================
-# Proxmox Common Functions
+# Proxmox Common Functions (Legacy Compatible)
 #
 # This script contains a library of shared functions for other Proxmox
 # management scripts to use. It is intended to be sourced, not executed directly.
-#
-# Usage in another script:
-#   source "$(dirname "$0")/proxmox-common.sh"
+# This version avoids '--output-format json' for compatibility with older
+# Proxmox versions.
 # ==============================================================================
 
 # --- Color Codes for Output ---
@@ -18,10 +17,9 @@ COLOR_BLUE='\033[0;34m'
 COLOR_NC='\033[0m' # No Color
 
 # --- Dependency Check ---
-# Ensures required commands (like jq) are available.
 check_dependencies() {
     local missing_deps=()
-    for dep in jq numfmt; do
+    for dep in awk numfmt; do
         if ! command -v "$dep" &> /dev/null; then
             missing_deps+=("$dep")
         fi
@@ -29,61 +27,61 @@ check_dependencies() {
 
     if [ ${#missing_deps[@]} -gt 0 ]; then
         echo -e "${COLOR_RED}❌ Error: This script requires the following missing commands: ${missing_deps[*]}${COLOR_NC}"
-        echo -e "${COLOR_YELLOW}⚠️ On Debian/Ubuntu, install them with: sudo apt install jq coreutils${COLOR_NC}"
+        echo -e "${COLOR_YELLOW}⚠️ On Debian/Ubuntu, install them with: sudo apt install gawk coreutils${COLOR_NC}"
         exit 1
     fi
 }
 
 # --- Helper Functions ---
-
-# Prints a formatted header.
-# Usage: print_header "My Header"
-print_header() {
-    echo -e "\n${COLOR_BLUE}--- $1 ---${COLOR_NC}"
-}
-
-# Prints a success message.
-# Usage: print_success "Task completed"
-print_success() {
-    echo -e "${COLOR_GREEN}✅ $1${COLOR_NC}"
-}
-
-# Prints an error message.
-# Usage: print_error "Task failed"
-print_error() {
-    echo -e "${COLOR_RED}❌ $1${COLOR_NC}"
-}
-
-# Prints a warning message.
-# Usage: print_warning "This is a warning"
-print_warning() {
-    echo -e "${COLOR_YELLOW}⚠️ $1${COLOR_NC}"
-}
-
+print_header() { echo -e "\n${COLOR_BLUE}--- $1 ---${COLOR_NC}"; }
+print_success() { echo -e "${COLOR_GREEN}✅ $1${COLOR_NC}"; }
+print_error() { echo -e "${COLOR_RED}❌ $1${COLOR_NC}"; }
+print_warning() { echo -e "${COLOR_YELLOW}⚠️ $1${COLOR_NC}"; }
 
 # --- Check Functions ---
 
 # Checks for available storage pools and their status.
 check_storage() {
     print_header "Storage Pool Status"
-    pvesm status --output-format json | jq -r '.[] | select(.active == 1) | [.storage, .type, .total, .avail] | @tsv' | while IFS=$'\t' read -r storage type total avail; do
-        total_gb=$(numfmt --to=iec-i --suffix=B --format="%.1f" "$total")
-        avail_gb=$(numfmt --to=iec-i --suffix=B --format="%.1f" "$avail")
-        print_success "Storage '${storage}' (${type}) is active. Space: ${avail_gb} / ${total_gb}"
+    local active_found=false
+    # Use tail to skip header, then awk to parse space-delimited table
+    pvesm status | tail -n +2 | while read -r name type status total avail percent; do
+        if [[ "$status" == "active" ]]; then
+            active_found=true
+            # Proxmox CLI returns bytes, so we format them
+            total_fmt=$(numfmt --to=iec-i --suffix=B --format="%.1f" "$total")
+            avail_fmt=$(numfmt --to=iec-i --suffix=B --format="%.1f" "$avail")
+            print_success "Storage '${name}' (${type}) is active. Space: ${avail_fmt} / ${total_fmt}"
+        fi
     done
 
-    if ! pvesm status | grep -q 'active 1'; then
+    if ! $active_found; then
         print_error "No active storage pools found."
         return 1
     fi
     return 0
 }
 
+# Finds a storage path by parsing /etc/pve/storage.cfg
+get_storage_path() {
+    local storage_name=$1
+    local path
+    # Awk script to find the storage block and print its path
+    path=$(awk -v storage="$storage_name" ' 
+        $0 == storage { in_block=1 }
+        in_block && /path/ { print $2; exit }
+        /^[a-z]+:/ { if(in_block) exit; }
+    ' /etc/pve/storage.cfg)
+    echo "$path"
+}
+
+
 # Checks for available LXC container templates.
 check_lxc_templates() {
     print_header "LXC Template Status"
     local template_storage
-    template_storage=$(pvesm status --output-format json | jq -r '.[] | select(.content | contains("vztmpl")) | .storage' | head -n 1)
+    # Find storage allowing 'vztmpl' content from storage config
+    template_storage=$(grep -B 2 'content .*vztmpl' /etc/pve/storage.cfg | grep -E 'dir:|nfs:|cifs:' | head -n 1 | awk '{print $2}')
 
     if [[ -z "$template_storage" ]]; then
         print_error "No storage pool found for LXC templates."
@@ -91,8 +89,9 @@ check_lxc_templates() {
         return 1
     fi
 
+    # pveam list output is a table, skip header and get the 'Volid' column
     local templates
-    templates=$(pveam list "$template_storage" --output-format json | jq -r '.[].volid')
+    templates=$(pveam list "$template_storage" | tail -n +2 | awk '{print $NF}')
     if [[ -z "$templates" ]]; then
         print_warning "No LXC templates found in storage '$template_storage'."
         print_warning "Use 'pveam download $template_storage <template-name>' to add some."
@@ -108,7 +107,8 @@ check_lxc_templates() {
 check_iso_images() {
     print_header "ISO Image Status"
     local iso_storage
-    iso_storage=$(pvesm status --output-format json | jq -r '.[] | select(.content | contains("iso")) | .storage' | head -n 1)
+    # Find storage allowing 'iso' content from storage config
+    iso_storage=$(grep -B 2 'content .*iso' /etc/pve/storage.cfg | grep -E 'dir:|nfs:|cifs:' | head -n 1 | awk '{print $2}')
 
     if [[ -z "$iso_storage" ]]; then
         print_error "No storage pool found for ISO images."
@@ -116,7 +116,7 @@ check_iso_images() {
     fi
 
     local iso_path
-    iso_path=$(pvesm status --storage "$iso_storage" --output-format json | jq -r '.[0].path')/template/iso
+    iso_path=$(get_storage_path "$iso_storage")/template/iso
 
     if [[ ! -d "$iso_path" ]] || ! ls -1qA "$iso_path" | grep -q .; then
         print_warning "No ISO images found in storage '$iso_storage' ($iso_path)."
@@ -145,28 +145,33 @@ check_networking() {
 }
 
 # Finds the next available VM or LXC ID.
-# Usage: get_next_id "vm" or get_next_id "lxc"
 get_next_id() {
     local type=$1
     local last_id=99
     local ids
 
     if [[ "$type" == "vm" ]]; then
-        ids=$(qm list --output-format json | jq -r '.[].vmid')
+        # Skip header (NR>1), print first column ($1)
+        ids=$(qm list | awk 'NR>1 {print $1}')
     elif [[ "$type" == "lxc" ]]; then
-        ids=$(pct list --output-format json | jq -r '.[].vmid')
+        ids=$(pct list | awk 'NR>1 {print $1}')
     else
         print_error "Invalid type for get_next_id. Use 'vm' or 'lxc'."
         return 1
     fi
 
     if [[ -n "$ids" ]]; then
+        # Sort numerically and get the last one
         last_id=$(echo "$ids" | sort -n | tail -n 1)
+    fi
+    
+    # Check if last_id is a number, default to 99 if not
+    if ! [[ "$last_id" =~ ^[0-9]+$ ]]; then
+        last_id=99
     fi
 
     echo "$((last_id + 1))"
 }
-
 
 # Checks if hardware virtualization is enabled.
 check_hw_virtualization() {
