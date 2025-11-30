@@ -232,6 +232,13 @@ data = "command_exists"
 values = ["pveversion"]
 
 [[data.entries]]
+name = "Proxmox Manager"
+description = "A menu-driven script to manage Proxmox tasks like pre-flight checks, creation of VMs and LXCs."
+script = "proxmox/proxmox-manager.sh"
+task_list = "P I FM"
+multi_select = false
+
+[[data.entries]]
 name = "Proxmox Update"
 description = "This command updates your Proxmox VE system to the latest packages."
 script = "proxmox/proxmox-update.sh"
@@ -243,18 +250,4 @@ name = "Proxmox Post-Install"
 description = "This script automates the essential post-installation tasks for a new Proxmox VE server."
 script = "proxmox/proxmox-post-install.sh"
 task_list = "P MP FM I"
-multi_select = false
-
-[[data.entries]]
-name = "Proxmox Tailscale Manager"
-description = "A menu-driven script to set up and manage a Tailscale subnet router in an LXC container."
-script = "proxmox/proxmox-tailscale.sh"
-task_list = "P I FM"
-multi_select = false
-
-[[data.entries]]
-name = "AdGuard-Tailscale Setup"
-description = "Deploy an LXC container on Proxmox with AdGuard Home and Tailscale for network-wide DNS filtering"
-script = "proxmox/adguard-tailscale-setup.sh"
-task_list = "P I FM"
 multi_select = false
