@@ -1,93 +1,68 @@
 #!/bin/bash
+set -e
 
-# Function to detect the Linux distribution and install Tailscale
-install_tailscale() {
-    if [ -f /etc/os-release ]; then
-        . /etc/os-release
-        DISTRO=$ID
-    else
-        echo "Unsupported OS. Cannot determine distribution."
-        exit 1
-    fi
-
-    echo "Detected distribution: $DISTRO"
-
-    case "$DISTRO" in
-        ubuntu|debian|pop)
-            echo "Using apt for installation..."
-            sudo apt-get update
-            sudo apt-get install -y curl
-            curl -fsSL https://tailscale.com/install.sh | sh
-            ;;
-        fedora|centos|rhel)
-            echo "Using dnf/yum for installation..."
-            sudo dnf install -y 'dnf-command(config-manager)'
-            sudo dnf config-manager --add-repo https://pkgs.tailscale.com/stable/fedora/tailscale.repo
-            sudo dnf install -y tailscale
-            ;;
-        arch)
-            echo "Using pacman for installation..."
-            # Check for AUR helper (yay/paru) or use makepkg
-            if command -v yay &> /dev/null; then
-                yay -S tailscale
-            elif command -v paru &> /dev/null; then
-                paru -S tailscale
-            else
-                echo "No AUR helper found. Please install Tailscale manually from the AUR."
-                exit 1
-            fi
+# Helper function for clear yes/no prompts. Defaults to 'no'.
+ask_yes_no() {
+    read -p "$1 (y/N): " response
+    case "$response" in
+        [yY][eE][sS]|[yY])
+            return 0
             ;;
         *)
-            echo "Unsupported distribution: $DISTRO. Trying generic script."
-            curl -fsSL https://tailscale.com/install.sh | sh
+            return 1
             ;;
     esac
-    
-    # Enable the Tailscale service
-    sudo systemctl enable --now tailscaled
 }
 
-# Main script execution
 echo "--- Tailscale Setup ---"
-install_tailscale
 
-# Build the tailscale up command
-TS_UP_CMD="sudo tailscale up"
+# 1. Installation
+echo "Installing Tailscale using the official script..."
+# The official script handles distro detection and is the most robust method.
+curl -fsSL https://tailscale.com/install.sh | sh
 
-# Ask for authentication method
-read -p "How do you want to authenticate? (api/manual): " AUTH_METHOD
-if [[ "$AUTH_METHOD" == "api" ]]; then
-    read -p "Please enter your Tailscale API auth key: " AUTH_KEY
-    if [ -n "$AUTH_KEY" ]; then
-        TS_UP_CMD="$TS_UP_CMD --authkey=$AUTH_KEY"
-    else
-        echo "No API key provided. You will need to run 'sudo tailscale up' manually."
+# 2. Enable and start the Tailscale service
+echo "Enabling and starting the Tailscale service..."
+sudo systemctl enable --now tailscaled
+
+# 3. Configuration
+echo "--- Configuration ---"
+
+# Use an array for command arguments for robustness
+declare -a cmd_args
+
+if ask_yes_no "Do you want to authenticate automatically using an API key?"; then
+    # Loop until a non-empty auth key is provided
+    AUTH_KEY=""
+    while [ -z "$AUTH_KEY" ]; do
+        read -p "Please enter your Tailscale API auth key: " AUTH_KEY
+        if [ -z "$AUTH_KEY" ]; then
+            echo "Auth key cannot be empty. Please try again."
+        fi
+    done
+    cmd_args+=("--authkey=$AUTH_KEY")
+
+    # Only ask to advertise routes if using an auth key
+    if ask_yes_no "Do you want to advertise routes?"; then
+        ROUTES=""
+        while [ -z "$ROUTES" ]; do
+            read -p "Please enter the routes to advertise (e.g., 10.0.0.0/8,192.168.0.0/24): " ROUTES
+            if [ -z "$ROUTES" ]; then
+                echo "Routes cannot be empty. Please try again."
+            fi
+        done
+        cmd_args+=("--advertise-routes=$ROUTES")
     fi
-elif [[ "$AUTH_METHOD" == "manual" ]]; then
-    echo "Please run 'sudo tailscale up' manually to authenticate this machine."
-else
-    echo "Invalid option. You will need to run 'sudo tailscale up' manually."
-fi
 
-# Ask about advertising a subnet
-read -p "Do you want to advertise a subnet? (yes/no): " ADVERTISE_SUBNET
-if [[ "$ADVERTISE_SUBNET" == "yes" ]]; then
-    read -p "Please enter the subnet to advertise (e.g., 192.168.1.0/24): " SUBNET
-    if [ -n "$SUBNET" ]; then
-        TS_UP_CMD="$TS_UP_CMD --advertise-routes=$SUBNET"
-    else
-        echo "No subnet provided. Skipping advertisement."
-    fi
-fi
+    echo "Running Tailscale with your configuration..."
+    sudo tailscale up "${cmd_args[@]}"
+    echo "Tailscale has been configured and is now running."
 
-# Execute the command if not manual
-if [[ "$AUTH_METHOD" == "api" ]]; then
-    echo "Running the following command: $TS_UP_CMD"
-    eval $TS_UP_CMD
-    echo "Tailscale setup is complete."
 else
-    echo "Manual setup chosen. Please complete the authentication when ready."
+    echo
+    echo "Okay. To connect this machine to your Tailnet, run the following command from your terminal:"
+    echo "  sudo tailscale up"
+    echo
 fi
 
 echo "-----------------------"
-
