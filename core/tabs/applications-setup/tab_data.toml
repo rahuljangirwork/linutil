@@ -56,7 +56,7 @@ task_list = "I"
 name = "Tailscale"
 description = "Installs and configures Tailscale, a mesh VPN, with options for API key authentication and subnet advertising."
 script = "rahul-setups/tailscale-setup.sh"
-task_list = "I"
+task_list = "IU"
 
 
 
