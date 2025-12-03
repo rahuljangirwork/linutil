@@ -1,7 +1,7 @@
 #!/bin/sh -e
 
 # Source common functions and variables
-. ../../tabs/common-script.sh
+. ../../common-script.sh
 
 # Function for clear yes/no prompts, defaulting to 'no'.
 confirm_action() {
