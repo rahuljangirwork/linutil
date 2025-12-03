@@ -52,6 +52,12 @@ description = "demo rofi"
 script = "rahul-setups/rofi-setup.sh"
 task_list = "I"
 
+[[data.entries]]
+name = "Tailscale"
+description = "Installs and configures Tailscale, a mesh VPN, with options for API key authentication and subnet advertising."
+script = "rahul-setups/tailscale-setup.sh"
+task_list = "I"
+
 
 
 [[data]]
