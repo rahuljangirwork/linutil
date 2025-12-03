@@ -69,17 +69,30 @@ fi
 
 # 4. Verify Connection
 printf "%b\n" "${YELLOW}Waiting for successful connection...${RC}"
-max_retries=15
+max_retries=30  # 30 retries * 2 seconds = 60 second timeout
 count=0
-while ! "$ESCALATION_TOOL" tailscale status | grep -q "Logged in."; do
-    if [ "$count" -ge "$max_retries" ]; then
+while [ "$count" -lt "$max_retries" ]; do
+    # Get status, default to an empty string if command fails
+    status_output=$("$ESCALATION_TOOL" tailscale status 2>/dev/null || echo "")
+
+    # Check for success
+    if echo "$status_output" | grep -q "Logged in."; then
+        printf "%b\n" "${GREEN}Successfully connected to Tailscale.${RC}"
+        break
+    fi
+
+    # If the loop is about to end, print the timeout error and exit
+    if [ "$count" -eq "$((max_retries - 1))" ]; then
         printf "%b\n" "${RED}Connection timed out. Please check your Tailscale dashboard.${RC}"
+        printf "%b\n" "${RED}Last status: $status_output${RC}"
         exit 1
     fi
+
+    # Provide feedback and wait
+    printf "%b\n" "${CYAN}Current status: $(echo "$status_output" | head -n1). Waiting... (Attempt $((count + 1))/$max_retries)${RC}"
     sleep 2
     count=$((count + 1))
 done
-printf "%b\n" "${GREEN}Successfully connected to Tailscale.${RC}"
 
 # 5. Advertise Routes (post-authentication)
 if confirm_action "Do you want to advertise routes?"; then
