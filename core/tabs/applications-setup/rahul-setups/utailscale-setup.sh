@@ -3,6 +3,17 @@
 # Source common functions and variables
 . ../../common-script.sh
 
+# Function for clear yes/no prompts, defaulting to 'no'.
+confirm_action() {
+    printf "%b" "${CYAN}$1 (y/N): ${RC}"
+    read -r confirm
+    if echo "$confirm" | grep -qE '^[Yy]$'; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 # --- Main Script Execution ---
 printf "%b\n" "${BLUE}--- Tailscale Uninstaller ---${RC}"
 

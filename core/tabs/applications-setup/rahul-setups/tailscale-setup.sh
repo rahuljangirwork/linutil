@@ -3,6 +3,17 @@
 # Source common functions and variables
 . ../../common-script.sh
 
+# Function for clear yes/no prompts, defaulting to 'no'.
+confirm_action() {
+    printf "%b" "${CYAN}$1 (y/N): ${RC}"
+    read -r confirm
+    if echo "$confirm" | grep -qE '^[Yy]$'; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 # 1. Install Tailscale if it's not already present
 install_tailscale() {
     printf "%b\n" "${YELLOW}Checking Tailscale installation...${RC}"
