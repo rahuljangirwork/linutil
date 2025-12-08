@@ -211,6 +211,12 @@ main() {
     print_header "Starting Container..."
     pct start "$vmid"
     sleep 5 # Wait for init
+
+    # Install Dependencies & SSH
+    print_header "Installing Dependencies..."
+    pct exec "$vmid" -- apt-get update
+    pct exec "$vmid" -- apt-get install -y curl openssh-server
+    pct exec "$vmid" -- systemctl enable --now ssh
     
     # Install Tailscale
     print_header "Installing Tailscale..."
