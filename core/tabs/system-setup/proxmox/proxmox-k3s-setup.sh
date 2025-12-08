@@ -207,6 +207,10 @@ main() {
         
     print_success "Container $vmid created."
     
+    # Enable TUN for Tailscale
+    echo "lxc.cgroup2.devices.allow: c 10:200 rwm" >> "/etc/pve/lxc/${vmid}.conf"
+    echo "lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file" >> "/etc/pve/lxc/${vmid}.conf"
+
     # Start Container
     print_header "Starting Container..."
     pct start "$vmid"
@@ -221,7 +225,7 @@ main() {
     # Install Tailscale
     print_header "Installing Tailscale..."
     pct exec "$vmid" -- curl -fsSL https://tailscale.com/install.sh | sh
-    pct exec "$vmid" -- tailscale up --authkey="$ts_key" --hostname="$hostname" --advertise-tags="tag:${ts_tag}" --ssh
+    pct exec "$vmid" -- /usr/bin/tailscale up --authkey="$ts_key" --hostname="$hostname" --advertise-tags="tag:${ts_tag}" --ssh
     
     # Install K3s
     print_header "Installing K3s Control Plane..."
