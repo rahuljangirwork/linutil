@@ -251,3 +251,10 @@ description = "This script automates the essential post-installation tasks for a
 script = "proxmox/proxmox-post-install.sh"
 task_list = "P MP FM I"
 multi_select = false
+
+[[data.entries]]
+name = "Proxmox K3s Control Plane"
+description = "Creates a new LXC container and sets up a K3s control plane with Tailscale."
+script = "proxmox/proxmox-k3s-setup.sh"
+task_list = "P MP I"
+multi_select = false
