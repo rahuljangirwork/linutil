@@ -79,6 +79,11 @@ main() {
     # Get Next ID
     local next_id
     next_id=$(get_next_id 'lxc' 2>/dev/null)
+    
+    # Log file on host (temporary)
+    LOG_FILE="/tmp/k3s-setup-${next_id}.log"
+    rm -f "$LOG_FILE" 2>/dev/null
+    
     # Default to 201 if next_id is less than 201 (as requested by user preference, though user said "default will 201")
     # If the user explicitly wants 201 as default, we can suggest it.
     if [ "$next_id" -lt 201 ]; then
@@ -92,6 +97,9 @@ main() {
     echo -e "✅ Proposed Container ID: ${COLOR_GREEN}${next_id}${COLOR_NC}"
     read -p "Press Enter to accept or enter a different ID: " vmid
     vmid=${vmid:-$next_id}
+    
+    # Update log file name if ID changed
+    LOG_FILE="/tmp/k3s-setup-${vmid}.log"
 
     # Select Template
     print_header "Select LXC Template"
@@ -210,7 +218,9 @@ main() {
     print_success "Container $vmid created."
     
     # Enable K3s and Tailscale Requirements
-    cat >> "/etc/pve/lxc/${vmid}.conf" << 'EOF'
+    # Enable K3s and Tailscale Requirements
+    if ! grep -q "lxc.mount.entry: /dev/kmsg" "/etc/pve/lxc/${vmid}.conf"; then
+        cat >> "/etc/pve/lxc/${vmid}.conf" << 'EOF'
 
 # K3s Requirements
 lxc.apparmor.profile: unconfined
@@ -223,6 +233,7 @@ lxc.mount.entry: /dev/kmsg dev/kmsg none bind,optional,create=file 0 0
 lxc.cgroup2.devices.allow: c 10:200 rwm
 lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
 EOF
+    fi
 
     # Start Container
     print_header "Starting Container..."
@@ -237,7 +248,7 @@ EOF
     
     # Install Tailscale
     print_header "Installing Tailscale..."
-    pct exec "$vmid" -- bash -c "curl -fsSL https://tailscale.com/install.sh | sh" | tee -a /tmp/k3s-setup.log
+    pct exec "$vmid" -- bash -c "curl -fsSL https://tailscale.com/install.sh | sh" | tee -a "$LOG_FILE"
     
     # Find Tailscale Binary
     TS_BIN=$(pct exec "$vmid" -- which tailscale)
@@ -248,12 +259,12 @@ EOF
     if [ -n "$TS_BIN" ]; then
         # Check if we are already logged in to avoid interactive prompt issues if re-running
         if ! pct exec "$vmid" -- "$TS_BIN" status >/dev/null 2>&1; then
-             pct exec "$vmid" -- "$TS_BIN" up --authkey="$ts_key" --hostname="$hostname" --advertise-tags="tag:${ts_tag}" --ssh 2>&1 | tee -a /tmp/k3s-setup.log
+             pct exec "$vmid" -- "$TS_BIN" up --authkey="$ts_key" --hostname="$hostname" --advertise-tags="tag:${ts_tag}" --ssh 2>&1 | tee -a "$LOG_FILE"
         else
-             echo "Tailscale already up." | tee -a /tmp/k3s-setup.log
+             echo "Tailscale already up." | tee -a "$LOG_FILE"
         fi
     else
-        echo "Error: Tailscale binary not found." | tee -a /tmp/k3s-setup.log
+        echo "Error: Tailscale binary not found." | tee -a "$LOG_FILE"
     fi
     
     # Install K3s
@@ -263,12 +274,14 @@ EOF
     
     # K3s Install
     # We use sh -c to properly handle piping and redirection inside the container
-    pct exec "$vmid" -- bash -c "curl -sfL https://get.k3s.io | sh -s - server --flannel-backend=none --disable-network-policy --tls-san $TS_IP --node-name $hostname" 2>&1 | tee -a /tmp/k3s-setup.log
+    pct exec "$vmid" -- bash -c "curl -sfL https://get.k3s.io | sh -s - server --flannel-backend=none --disable-network-policy --tls-san $TS_IP --node-name $hostname" 2>&1 | tee -a "$LOG_FILE"
 
     print_success "K3s Control Plane Setup Complete on Node $vmid ($hostname)"
     
     # Move log to persistent location
-    pct exec "$vmid" -- mv /tmp/k3s-setup.log /var/log/k3s-setup.log
+    print_header "Saving Logs..."
+    pct push "$vmid" "$LOG_FILE" /var/log/k3s-setup.log
+    rm -f "$LOG_FILE"
 
     # Recommendation
     echo ""
