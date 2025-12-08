@@ -209,9 +209,20 @@ main() {
         
     print_success "Container $vmid created."
     
-    # Enable TUN for Tailscale
-    echo "lxc.cgroup2.devices.allow: c 10:200 rwm" >> "/etc/pve/lxc/${vmid}.conf"
-    echo "lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file" >> "/etc/pve/lxc/${vmid}.conf"
+    # Enable K3s and Tailscale Requirements
+    cat >> "/etc/pve/lxc/${vmid}.conf" << 'EOF'
+
+# K3s Requirements
+lxc.apparmor.profile: unconfined
+lxc.cgroup2.devices.allow: a
+lxc.cap.drop:
+lxc.mount.auto: proc:rw sys:rw
+lxc.mount.entry: /dev/kmsg dev/kmsg none bind,optional,create=file 0 0
+
+# Tailscale TUN Device
+lxc.cgroup2.devices.allow: c 10:200 rwm
+lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
+EOF
 
     # Start Container
     print_header "Starting Container..."
