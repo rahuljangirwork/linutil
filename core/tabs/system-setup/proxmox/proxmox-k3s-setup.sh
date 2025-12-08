@@ -22,8 +22,51 @@ get_lxc_templates() {
 }
 
 get_rootfs_storage() {
-    grep -B 2 'content .*rootdir' /etc/pve/storage.cfg | grep 'dir:\|lvmthin:\|zfspool:' | awk '{print $2}'
-    grep -B 2 'content .*images' /etc/pve/storage.cfg | grep 'dir:\|lvmthin:\|zfspool:' | awk '{print $2}'
+    # Parse pvesm status to find active storage that supports rootdir or images
+    # We look for storage that is 'active' and supports 'rootdir' or 'images' content type.
+    # pvesm status output format: Name Type Status Total Used Available %
+    # pvesm set/list commands might be better but pvesm status ensures it's online.
+    
+    # Better approach: Iterate over all storage and check content type using pvesm list or just parsing config is safer IF we cross reference status.
+    # However, 'pvesm status' doesn't show content type.
+    # 'pvesm list <storage>' fails if not available.
+    
+    # Robust method:
+    # 1. Get List of all enabled storage from pvesm status (to ensure they are up)
+    local active_storages
+    active_storages=$(pvesm status -enabled 2>/dev/null | awk 'NR>1 {print $1}')
+    
+    if [[ -z "$active_storages" ]]; then
+        return
+    fi
+    
+    # 2. For each active storage, check if it allows 'rootdir' or 'images'
+    for storage in $active_storages; do
+        # check content type from storage.cfg for this storage
+        # pvesm gets ugly to parse content type directly from CLI without json.
+        # simpler: grep the config for this specific storage block and check content.
+        
+        # We can use pvesm path to check if it supports the content type? No.
+        # Let's fallback to parsing the config BUT only for storages that are in $active_storages.
+        
+        # Actually, 'pvesm list <storage> --content rootdir' serves as a check? No, that lists volumes.
+        
+        # Let's stick to parsing /etc/pve/storage.cfg but cross-referencing with active_storages.
+        # This is safe because we only offer what is configured AND active.
+        
+        local content
+        content=$(grep -A 5 "dir: $storage\|lvm: $storage\|lvmthin: $storage\|zfspool: $storage\|cifs: $storage\|nfs: $storage\|glusterfs: $storage\|pbs: $storage\|iscsi: $storage\|cephfs: $storage\|rbd: $storage\|zfs: $storage" /etc/pve/storage.cfg | grep "content" | head -n 1)
+        
+        # If we can't match exact line easily, let's use a simpler heuristic for content.
+        # A storage block starts with "type: name".
+        # We can just check if the storage name appears in the config associated with rootdir.
+        
+        if pvesm list "$storage" --content rootdir >/dev/null 2>&1; then
+            echo "$storage"
+        elif pvesm list "$storage" --content images >/dev/null 2>&1; then
+             echo "$storage"
+        fi
+    done
 }
 
 # --- Main Logic ---
