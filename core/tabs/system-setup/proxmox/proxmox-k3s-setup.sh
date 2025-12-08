@@ -156,14 +156,16 @@ main() {
     
     if [ "$ip_type" = "static" ]; then
         while true; do
-            read -p "IP CIDR (e.g. 192.168.1.100/24): " static_ip
+            read -p "IP CIDR [Default: 192.168.0.201/24]: " static_ip
+            static_ip=${static_ip:-192.168.0.201/24}
             if [[ "$static_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/[0-9]+$ ]]; then
                 break
             else
                 echo "Invalid format. Please include subnet mask (e.g., /24)."
             fi
         done
-        read -p "Gateway (e.g. 192.168.1.1): " gateway
+        read -p "Gateway [Default: 192.168.0.1]: " gateway
+        gateway=${gateway:-192.168.0.1}
         read -p "DNS Server (Optional): " dns
         net0="name=eth0,bridge=${bridge},ip=${static_ip},gw=${gateway}"
         if [ -n "$dns" ]; then nameserver="--nameserver ${dns}"; fi
@@ -224,34 +226,46 @@ main() {
     
     # Install Tailscale
     print_header "Installing Tailscale..."
-    pct exec "$vmid" -- curl -fsSL https://tailscale.com/install.sh | sh
-    pct exec "$vmid" -- /usr/bin/tailscale up --authkey="$ts_key" --hostname="$hostname" --advertise-tags="tag:${ts_tag}" --ssh
+    pct exec "$vmid" -- bash -c "curl -fsSL https://tailscale.com/install.sh | sh" | tee -a /tmp/k3s-setup.log
+    
+    # Find Tailscale Binary
+    TS_BIN=$(pct exec "$vmid" -- which tailscale)
+    if [ -z "$TS_BIN" ]; then
+        TS_BIN=$(pct exec "$vmid" -- find / -name tailscale -type f -executable 2>/dev/null | head -n 1)
+    fi
+    
+    if [ -n "$TS_BIN" ]; then
+        # Check if we are already logged in to avoid interactive prompt issues if re-running
+        if ! pct exec "$vmid" -- "$TS_BIN" status >/dev/null 2>&1; then
+             pct exec "$vmid" -- "$TS_BIN" up --authkey="$ts_key" --hostname="$hostname" --advertise-tags="tag:${ts_tag}" --ssh 2>&1 | tee -a /tmp/k3s-setup.log
+        else
+             echo "Tailscale already up." | tee -a /tmp/k3s-setup.log
+        fi
+    else
+        echo "Error: Tailscale binary not found." | tee -a /tmp/k3s-setup.log
+    fi
     
     # Install K3s
     print_header "Installing K3s Control Plane..."
-    # We use --disable traefik by default for a cleaner control plane, or keep it standard. 
-    # User didn't specify, but often preferred. keeping standard for now.
-    # User asked for "set the tainsale connacter network" - assumed implied inside container.
-    pct exec "$vmid" -- curl -sfL https://get.k3s.io | sh -s - server --flannel-backend=none --disable-network-policy --tls-san $(tailscale ip -4)
-    # Note: flannel-backend=none implies using something else or tailscale networking if configured manually, 
-    # but strictly for "k3s control plane" usually we need a CNI. 
-    # If the user wants "tailscale connector network", they might mean utilizing tailscale for node communication.
-    # The simplest standard k3s install is usually best unless specified otherwise.
-    # Let's stick to standard k3s install but with tailscale IP as node-ip if possible, 
-    # or just simple install and let user configure CNI if they have specific complex needs.
-    # "set the tainsale connacter network" -> confusing. Maybe "tailscale subnet router"? 
-    # Or "advertise-routes"? user said "set the tainsale connacter network ask me for api token aks me for tag name and host name"
-    # I interpreted this as joining the tailnet.
+    # Get Tailscale IP
+    TS_IP=$(pct exec "$vmid" -- "$TS_BIN" ip -4 2>/dev/null)
     
-    # Simplified K3s install:
-    pct exec "$vmid" -- sh -c "curl -sfL https://get.k3s.io | sh -s - server --node-name $hostname"
+    # K3s Install
+    # We use sh -c to properly handle piping and redirection inside the container
+    pct exec "$vmid" -- bash -c "curl -sfL https://get.k3s.io | sh -s - server --flannel-backend=none --disable-network-policy --tls-san $TS_IP --node-name $hostname" 2>&1 | tee -a /tmp/k3s-setup.log
 
     print_success "K3s Control Plane Setup Complete on Node $vmid ($hostname)"
     
+    # Move log to persistent location
+    pct exec "$vmid" -- mv /tmp/k3s-setup.log /var/log/k3s-setup.log
+
     # Recommendation
     echo ""
     echo -e "${COLOR_YELLOW}Recommendation:${COLOR_NC} For HA k3s control plane, you should have at least 3 nodes."
     echo "This script can be run again to create additional control plane nodes (join command required)."
+    echo ""
+    echo "To view installation logs:"
+    echo "pct exec $vmid -- cat /var/log/k3s-setup.log"
     
 }
 
