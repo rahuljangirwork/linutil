@@ -155,7 +155,14 @@ main() {
     ip_type=${ip_type:-dhcp}
     
     if [ "$ip_type" = "static" ]; then
-        read -p "IP CIDR (e.g. 192.168.1.100/24): " static_ip
+        while true; do
+            read -p "IP CIDR (e.g. 192.168.1.100/24): " static_ip
+            if [[ "$static_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/[0-9]+$ ]]; then
+                break
+            else
+                echo "Invalid format. Please include subnet mask (e.g., /24)."
+            fi
+        done
         read -p "Gateway (e.g. 192.168.1.1): " gateway
         read -p "DNS Server (Optional): " dns
         net0="name=eth0,bridge=${bridge},ip=${static_ip},gw=${gateway}"
@@ -191,7 +198,7 @@ main() {
     pct create "$vmid" "$template_volid" \
         --rootfs "$rootfs" \
         --hostname "$hostname" \
-        --password "k3s" \
+        --password "k3s-password" \
         --memory "$memory" --swap "$swap" --cores "$cores" \
         --net0 "$net0" \
         --onboot 1 \
