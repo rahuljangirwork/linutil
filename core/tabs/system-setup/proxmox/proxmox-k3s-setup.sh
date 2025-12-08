@@ -274,9 +274,13 @@ EOF
     
     # K3s Install
     # We use sh -c to properly handle piping and redirection inside the container
-    pct exec "$vmid" -- bash -c "curl -sfL https://get.k3s.io | sh -s - server --flannel-backend=none --disable-network-policy --tls-san $TS_IP --node-name $hostname" 2>&1 | tee -a "$LOG_FILE"
+    # Added --kubelet-arg=feature-gates=KubeletInUserNamespace=true for unprivileged LXC support
+    pct exec "$vmid" -- bash -c "curl -sfL https://get.k3s.io | sh -s - server --flannel-backend=none --disable-network-policy --tls-san $TS_IP --node-name $hostname --kubelet-arg=feature-gates=KubeletInUserNamespace=true" 2>&1 | tee -a "$LOG_FILE"
 
     print_success "K3s Control Plane Setup Complete on Node $vmid ($hostname)"
+    
+    # Symlink kubectl to /usr/bin so it's in PATH
+    pct exec "$vmid" -- ln -sf /usr/local/bin/k3s /usr/bin/kubectl
     
     # Move log to persistent location
     print_header "Saving Logs..."
