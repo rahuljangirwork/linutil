@@ -28,6 +28,13 @@ print_error() {
 
 check_root() {
     if [ "$(id -u)" -ne 0 ]; then
+        if [ "$0" = "bash" ] || [ "$0" = "sh" ] || [ ! -f "$0" ]; then
+             print_error "This script requires root privileges."
+             echo "When running via curl/pipes, please use:"
+             echo "  curl -fsSL ... | sudo bash"
+             exit 1
+        fi
+
         if command -v sudo >/dev/null 2>&1; then
             print_header "Elevating Permissions"
             echo "This script requires root privileges. Prompting for sudo..."
