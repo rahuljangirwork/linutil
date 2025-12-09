@@ -112,6 +112,32 @@ main() {
         fi
     fi
 
+    # --- 2. Input Configuration ---
+    print_header "Configuration"
+    
+    # Check for K3s URL/Token env vars, otherwise prompt
+    if [ -z "$K3S_URL" ]; then
+        read -p "Control Plane URL (e.g., https://192.168.1.100:6443): " k3s_url < /dev/tty
+    else
+        k3s_url=$K3S_URL
+    fi
+
+    if [ -z "$K3S_TOKEN" ]; then
+        read -p "Cluster Token: " k3s_token < /dev/tty
+    else
+        k3s_token=$K3S_TOKEN
+    fi
+
+    if [ -z "$k3s_url" ] || [ -z "$k3s_token" ]; then
+        print_error "K3s URL and Token are required."
+        exit 1
+    fi
+
+    # Tailscale Inputs
+    read -p "Enter Tailscale Auth Key (tskey-auth-...): " ts_key < /dev/tty
+    read -p "Enter Hostname (for OS and Tailscale): " hostname < /dev/tty
+    read -p "Enter Tailscale Tag (optional, e.g. k3s-worker): " ts_tag < /dev/tty
+
     # --- 5. Tailscale Installation & Setup ---
     print_header "Installing Tailscale"
     curl -fsSL https://tailscale.com/install.sh | sh
