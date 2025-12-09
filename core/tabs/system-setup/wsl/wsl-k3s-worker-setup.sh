@@ -56,7 +56,13 @@ main() {
         exit 1
     fi
 
-    # --- 2. K3s Inputs ---
+    # --- 2. Tailscale Configuration ---
+    print_header "Tailscale Configuration"
+    read -p "Enter Tailscale Auth Key (tskey-auth-...): " ts_key
+    read -p "Enter Hostname (for OS and Tailscale): " hostname
+    read -p "Enter Tailscale Tag (optional, e.g. k3s-worker): " ts_tag
+
+    # --- 3. K3s Inputs ---
     print_header "K3s Cluster Information"
     echo "Enter the connection details for your existing K3s Control Plane."
     
@@ -68,7 +74,7 @@ main() {
         exit 1
     fi
 
-    # --- 3. System Prep & Dependencies ---
+    # --- 4. System Prep & Dependencies ---
     print_header "Installing Dependencies"
     
     # Detect Package Manager (Basic support)
@@ -111,8 +117,43 @@ main() {
         echo -e "[user]\ndefault=$username" > /etc/wsl.conf
         print_success "Updated /etc/wsl.conf"
     fi
+    
+    # Set hostname if provided
+    if [ -n "$hostname" ]; then
+        if ! grep -q "hostname=$hostname" /etc/wsl.conf 2>/dev/null; then
+             echo -e "[network]\nhostname=$hostname" >> /etc/wsl.conf
+             hostnamectl set-hostname "$hostname" 2>/dev/null || echo "Could not set hostname immediately, requires restart."
+        fi
+    fi
 
-    # --- 5. SSH Configuration ---
+    # --- 5. Tailscale Installation & Setup ---
+    print_header "Installing Tailscale"
+    curl -fsSL https://tailscale.com/install.sh | sh
+    
+    print_header "Authenticating Tailscale"
+    if [ -n "$ts_key" ]; then
+        extra_args=""
+        if [ -n "$ts_tag" ]; then
+            extra_args="--advertise-tags=tag:${ts_tag}"
+        fi
+        if [ -n "$hostname" ]; then
+            extra_args="$extra_args --hostname=${hostname}"
+        fi
+        
+        tailscale up --authkey="$ts_key" --ssh $extra_args
+    else
+        echo "No auth key provided. Please run 'tailscale up' manually."
+    fi
+
+    # Get Tailscale IP
+    TS_IP=$(tailscale ip -4 2>/dev/null)
+    if [ -n "$TS_IP" ]; then
+        print_success "Tailscale IP: $TS_IP"
+    else
+        print_error "Could not retrieve Tailscale IP. Is Tailscale running?"
+    fi
+
+    # --- 6. SSH Configuration ---
     print_header "Setting up SSH"
     # Ensure keys exist
     ssh-keygen -A >/dev/null 2>&1
@@ -125,11 +166,12 @@ main() {
     fi
     print_success "SSH Service configured."
 
-    # --- 6. K3s Installation ---
+    # --- 7. K3s Installation ---
     print_header "Installing K3s Agent (Worker)"
     
     # Install K3s Agent
-    curl -sfL https://get.k3s.io | K3S_URL="$k3s_url" K3S_TOKEN="$k3s_token" sh -
+    # We use FLANNEL_IFACE=tailscale0 to ensure K3s uses the Tailscale interface
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="agent --flannel-iface=tailscale0" K3S_URL="$k3s_url" K3S_TOKEN="$k3s_token" sh -
     
     if [ $? -eq 0 ]; then
         print_success "K3s Agent successfully installed!"
@@ -139,7 +181,7 @@ main() {
         exit 1
     fi
 
-    # --- 7. Final Notes ---
+    # --- 8. Final Notes ---
     print_header "Setup Complete"
     echo "To verify, run 'kubectl get nodes' on your control plane."
     echo "Note: If you just changed the default user in /etc/wsl.conf, you may need to restart WSL (wsl --shutdown) for it to take effect on login."
