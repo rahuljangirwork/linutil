@@ -187,6 +187,15 @@ main() {
     read -p "Enter Hostname (for OS and Tailscale): " hostname
     read -p "Enter Tailscale Tag (e.g. k3s-control): " ts_tag
     
+    # HA Cluster Configuration
+    read -p "Is this the FIRST control plane node? (y/n) [Default: n]: " is_first_node
+    is_first_node=${is_first_node:-n}
+
+    if [[ "$is_first_node" = "n" ]]; then
+        read -p "Enter EXISTING control plane Tailscale IP: " existing_cp_ip
+        read -p "Enter K3S cluster token: " k3s_token
+    fi
+    
     # --- 3. Confirmation ---
     clear
     print_header "Confirm Settings"
@@ -272,13 +281,21 @@ EOF
     # Get Tailscale IP
     TS_IP=$(pct exec "$vmid" -- "$TS_BIN" ip -4 2>/dev/null)
     
-    # K3s Install
-    # We use sh -c to properly handle piping and redirection inside the container
-    # Added --kubelet-arg=feature-gates=KubeletInUserNamespace=true for unprivileged LXC support
-    # Removed --flannel-backend=none to enable default Flannel CNI (VXLAN)
-    pct exec "$vmid" -- bash -c "curl -sfL https://get.k3s.io | sh -s - server --tls-san $TS_IP --node-name $hostname --kubelet-arg=feature-gates=KubeletInUserNamespace=true" 2>&1 | tee -a "$LOG_FILE"
-
-    print_success "K3s Control Plane Setup Complete on Node $vmid ($hostname)"
+    if [[ "$is_first_node" = "y" ]]; then
+        # First node: Initialize cluster with --cluster-init
+        # Added --kubelet-arg=feature-gates=KubeletInUserNamespace=true for unprivileged LXC support
+        pct exec "$vmid" -- bash -c "curl -sfL https://get.k3s.io | sh -s - server --cluster-init --tls-san $TS_IP --node-name $hostname --kubelet-arg=feature-gates=KubeletInUserNamespace=true" 2>&1 | tee -a "$LOG_FILE"
+        
+        print_success "First control plane initialized!"
+        echo ""
+        echo -e "${COLOR_YELLOW}IMPORTANT: Save this token for adding CP2 and CP3:${COLOR_NC}"
+        pct exec "$vmid" -- cat /var/lib/rancher/k3s/server/token
+    else
+        # Joining node: Use --server flag
+        pct exec "$vmid" -- bash -c "curl -sfL https://get.k3s.io | K3S_TOKEN=$k3s_token sh -s - server --server https://${existing_cp_ip}:6443 --tls-san $TS_IP --node-name $hostname --kubelet-arg=feature-gates=KubeletInUserNamespace=true" 2>&1 | tee -a "$LOG_FILE"
+        
+        print_success "Joined K3s Control Plane Node $vmid ($hostname)"
+    fi
     
     # Symlink kubectl to /usr/bin so it's in PATH
     pct exec "$vmid" -- ln -sf /usr/local/bin/k3s /usr/bin/kubectl
