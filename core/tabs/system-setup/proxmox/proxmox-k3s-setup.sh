@@ -275,7 +275,8 @@ EOF
     # K3s Install
     # We use sh -c to properly handle piping and redirection inside the container
     # Added --kubelet-arg=feature-gates=KubeletInUserNamespace=true for unprivileged LXC support
-    pct exec "$vmid" -- bash -c "curl -sfL https://get.k3s.io | sh -s - server --flannel-backend=none --disable-network-policy --tls-san $TS_IP --node-name $hostname --kubelet-arg=feature-gates=KubeletInUserNamespace=true" 2>&1 | tee -a "$LOG_FILE"
+    # Removed --flannel-backend=none to enable default Flannel CNI (VXLAN)
+    pct exec "$vmid" -- bash -c "curl -sfL https://get.k3s.io | sh -s - server --tls-san $TS_IP --node-name $hostname --kubelet-arg=feature-gates=KubeletInUserNamespace=true" 2>&1 | tee -a "$LOG_FILE"
 
     print_success "K3s Control Plane Setup Complete on Node $vmid ($hostname)"
     
