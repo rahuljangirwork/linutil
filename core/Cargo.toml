@@ -1,5 +1,5 @@
 [package]
-name = "linutil_core"
+name = "rahul_linutil_core"
 description = "The backend of Linutil."
 repository = "https://github.com/rahuljangirwork/linutil/tree/main/core"
 edition = "2021"

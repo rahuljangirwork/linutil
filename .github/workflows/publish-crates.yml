@@ -16,7 +16,7 @@ jobs:
       - name: Publish Core
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish -p linutil_core
+        run: cargo publish -p rahul_linutil_core
 
       - name: Wait for Propagation
         run: sleep 30
@@ -24,4 +24,4 @@ jobs:
       - name: Publish TUI
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish -p linutil_tui
+        run: cargo publish -p rahul_linutil_tui
