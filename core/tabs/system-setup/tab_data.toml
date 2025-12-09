@@ -273,3 +273,10 @@ description = "Sets up the current WSL instance as a K3s worker node."
 script = "wsl/wsl-k3s-worker-setup.sh"
 task_list = "I"
 multi_select = false
+
+[[data.entries]]
+name = "WSL K3s Cleanup"
+description = "Uninstalls K3s Agent and removes WSL mount fixes."
+script = "wsl/wsl-k3s-cleanup.sh"
+task_list = "RP"
+multi_select = false

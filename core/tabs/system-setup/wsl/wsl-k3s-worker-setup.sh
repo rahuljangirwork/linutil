@@ -28,8 +28,14 @@ print_error() {
 
 check_root() {
     if [ "$(id -u)" -ne 0 ]; then
-        print_error "This script must be run as root (or with sudo)."
-        exit 1
+        if command -v sudo >/dev/null 2>&1; then
+            print_header "Elevating Permissions"
+            echo "This script requires root privileges. Prompting for sudo..."
+            exec sudo bash "$0" "$@"
+        else
+            print_error "This script requires root privileges and sudo was not found."
+            exit 1
+        fi
     fi
 }
 
@@ -131,7 +137,9 @@ main() {
     curl -fsSL https://tailscale.com/install.sh | sh
     
     print_header "Authenticating Tailscale"
-    if [ -n "$ts_key" ]; then
+    if tailscale status >/dev/null 2>&1; then
+        echo "Tailscale is already up and running."
+    elif [ -n "$ts_key" ]; then
         extra_args=""
         if [ -n "$ts_tag" ]; then
             extra_args="--advertise-tags=tag:${ts_tag}"
@@ -142,7 +150,7 @@ main() {
         
         tailscale up --authkey="$ts_key" --ssh $extra_args
     else
-        echo "No auth key provided. Please run 'tailscale up' manually."
+        echo "No auth key provided and Tailscale is not running. Please run 'tailscale up' manually."
     fi
 
     # Get Tailscale IP
@@ -166,12 +174,50 @@ main() {
     fi
     print_success "SSH Service configured."
 
-    # --- 7. K3s Installation ---
+    # --- 7. Fix Mount Propagation (WSL2 Issue) ---
+    print_header "Applying WSL2 Mount Fix"
+    # K3s/Node Exporter needs shared mount propagation for / to access host filesystem
+    # We create a systemd service to ensure this persists across restarts.
+    
+    cat <<EOF > /etc/systemd/system/wsl-mount-fix.service
+[Unit]
+Description=Make root mount shared for K3s (WSL2 Fix)
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/mount --make-rshared /
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    if command -v systemctl &>/dev/null; then
+        systemctl daemon-reload
+        systemctl enable --now wsl-mount-fix.service
+        print_success "Mount propagation fix applied."
+    else
+        mount --make-rshared /
+        print_success "Mount propagation fix applied (Manual). Note: Persistence requires systemd."
+    fi
+
+    # --- 8. K3s Installation ---
     print_header "Installing K3s Agent (Worker)"
     
     # Install K3s Agent
     # We use FLANNEL_IFACE=tailscale0 to ensure K3s uses the Tailscale interface
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="agent --flannel-iface=tailscale0" K3S_URL="$k3s_url" K3S_TOKEN="$k3s_token" sh -
+    # We add labels to identify this as a WSL node
+    # Install K3s Agent
+    # We use FLANNEL_IFACE=tailscale0 to ensure K3s uses the Tailscale interface
+    # We add labels to identify this as a WSL node
+    
+    if systemctl is-active --quiet k3s-agent; then
+        print_success "K3s Agent is already running."
+        echo "Restarting service to apply any new configurations..."
+        systemctl restart k3s-agent
+    else
+        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="agent --flannel-iface=tailscale0 --node-label kubernetes.io/os=linux-wsl --node-label env=wsl2" K3S_URL="$k3s_url" K3S_TOKEN="$k3s_token" sh -
+    fi
     
     if [ $? -eq 0 ]; then
         print_success "K3s Agent successfully installed!"
@@ -181,7 +227,7 @@ main() {
         exit 1
     fi
 
-    # --- 8. Final Notes ---
+    # --- 9. Final Notes ---
     print_header "Setup Complete"
     echo "To verify, run 'kubectl get nodes' on your control plane."
     echo "Note: If you just changed the default user in /etc/wsl.conf, you may need to restart WSL (wsl --shutdown) for it to take effect on login."
