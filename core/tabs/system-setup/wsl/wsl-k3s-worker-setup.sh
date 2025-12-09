@@ -69,83 +69,38 @@ main() {
         print_success "Systemd is running."
     fi
 
-    # --- 1. User Inputs ---
-    echo "First, we need to configure the user for this WSL instance."
-    echo "This user will have root (sudo) privileges."
-    
-    read -p "Enter Username: " username < /dev/tty
-    if [ -z "$username" ]; then
-        print_error "Username cannot be empty."
-        exit 1
-    fi
-
-    echo "Enter Password:"
-    read -s password < /dev/tty
-    echo
-    if [ -z "$password" ]; then
-        print_error "Password cannot be empty."
-        exit 1
-    fi
-
-    # --- 2. Tailscale Configuration ---
-    print_header "Tailscale Configuration"
-    read -p "Enter Tailscale Auth Key (tskey-auth-...): " ts_key < /dev/tty
-    read -p "Enter Hostname (for OS and Tailscale): " hostname < /dev/tty
-    read -p "Enter Tailscale Tag (optional, e.g. k3s-worker): " ts_tag < /dev/tty
-
-    # --- 3. K3s Inputs ---
-    print_header "K3s Cluster Information"
-    echo "Enter the connection details for your existing K3s Control Plane."
-    
-    read -p "Control Plane URL (e.g., https://192.168.1.100:6443): " k3s_url < /dev/tty
-    read -p "Cluster Token: " k3s_token < /dev/tty
-    
-    if [ -z "$k3s_url" ] || [ -z "$k3s_token" ]; then
-        print_error "K3s URL and Token are required."
-        exit 1
-    fi
-
-    # --- 4. System Prep & Dependencies ---
-    print_header "Installing Dependencies"
-    
-    # Detect Package Manager (Basic support)
-    if command -v apt-get &>/dev/null; then
-        apt-get update
-        apt-get install -y curl wget openssh-server sudo
-    elif command -v pacman &>/dev/null; then
-        pacman -Syu --noconfirm curl wget openssh sudo
-    elif command -v dnf &>/dev/null; then
-        dnf install -y curl wget openssh-server sudo
+    # --- 1. User Configuration ---
+    # We attempt to detect the user who invoked sudo to avoid prompts
+    if [ -n "$SUDO_USER" ]; then
+        TARGET_USER="$SUDO_USER"
+        print_success "Auto-detected user: $TARGET_USER"
     else
-        print_error "Unsupported package manager. Please install curl, wget, openssh-server manually."
-        exit 1
+        read -p "Enter Username (default: root): " input_user < /dev/tty
+        TARGET_USER="${input_user:-root}"
     fi
 
-    # --- 4. User Configuration ---
-    print_header "Configuring User: $username"
-    
-    if id "$username" &>/dev/null; then
-        echo "User $username exists. Updating password..."
-        echo "$username:$password" | chpasswd
+    # Only prompt for password if we are CREATING a new user (which we rarely do now)
+    if id "$TARGET_USER" &>/dev/null; then
+        echo "Using existing user: $TARGET_USER"
     else
-        echo "Creating user $username..."
-        useradd -m -s /bin/bash "$username"
-        echo "$username:$password" | chpasswd
+        echo "User $TARGET_USER not found. Creating..."
+        read -s -p "Enter Password for $TARGET_USER: " password < /dev/tty
+        echo
+        useradd -m -s /bin/bash "$TARGET_USER"
+        echo "$TARGET_USER:$password" | chpasswd
+        
+        # Add to sudoers/wheel
+        if getent group sudo &>/dev/null; then
+            usermod -aG sudo "$TARGET_USER"
+        elif getent group wheel &>/dev/null; then
+            usermod -aG wheel "$TARGET_USER"
+        fi
     fi
-
-    # Add to sudoers/wheel
-    if getent group sudo &>/dev/null; then
-        usermod -aG sudo "$username"
-    elif getent group wheel &>/dev/null; then
-        usermod -aG wheel "$username"
-    fi
-    print_success "User configured."
 
     # Set Default WSL User via /etc/wsl.conf
-    # This ensures that next time WSL starts, it logs in as this user.
-    if ! grep -q "default=$username" /etc/wsl.conf 2>/dev/null; then
+    if ! grep -q "default=$TARGET_USER" /etc/wsl.conf 2>/dev/null; then
         print_header "Setting default WSL user"
-        echo -e "[user]\ndefault=$username" > /etc/wsl.conf
+        echo -e "[user]\ndefault=$TARGET_USER" > /etc/wsl.conf
         print_success "Updated /etc/wsl.conf"
     fi
     
