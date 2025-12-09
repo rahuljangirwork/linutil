@@ -258,3 +258,18 @@ description = "Creates a new LXC container and sets up a K3s control plane with 
 script = "proxmox/proxmox-k3s-setup.sh"
 task_list = "P MP I"
 multi_select = false
+
+[[data]]
+name = "WSL"
+
+[[data.preconditions]]
+matches = true
+data = { containing_file = "/proc/version" }
+values = ["microsoft"]
+
+[[data.entries]]
+name = "WSL K3s Worker Setup"
+description = "Sets up the current WSL instance as a K3s worker node."
+script = "wsl/wsl-k3s-worker-setup.sh"
+task_list = "I"
+multi_select = false
