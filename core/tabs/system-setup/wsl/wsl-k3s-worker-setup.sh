@@ -44,6 +44,24 @@ main() {
     clear
     print_header "WSL K3s Worker Node Setup"
 
+    # --- 0. Systemd Pre-flight Check ---
+    print_header "Checking System Requirements"
+    if ! command -v systemctl &>/dev/null || ! systemctl list-units --type=target &>/dev/null; then
+        print_error "Systemd is NOT enabled or running."
+        echo "K3s and Tailscale require systemd to function correctly."
+        echo ""
+        echo "To enable systemd in WSL2:"
+        echo "1. Run the following command in this terminal:"
+        echo "   echo -e '[boot]\nsystemd=true' | sudo tee /etc/wsl.conf"
+        echo "2. Exit this terminal."
+        echo "3. Run 'wsl --shutdown' from PowerShell."
+        echo "4. Restart this WSL instance and re-run this script."
+        echo ""
+        exit 1
+    else
+        print_success "Systemd is running."
+    fi
+
     # --- 1. User Inputs ---
     echo "First, we need to configure the user for this WSL instance."
     echo "This user will have root (sudo) privileges."
