@@ -46,11 +46,10 @@ Write-Host "[3/6] Enabling Systemd in Ubuntu..." -ForegroundColor Yellow
 Start-Sleep -Seconds 5
 
 # Check if we can actually run WSL commands (implies components are ready)
-try {
-    wsl -d Ubuntu -u root -e id
-} catch {
-    $err = $_.Exception.Message
-    if ($err -match "WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED") {
+# Check if we can actually run WSL commands (implies components are ready)
+$checkOutput = wsl -d Ubuntu -u root -e id 2>&1 | Out-String
+if ($LASTEXITCODE -ne 0) {
+    if ($checkOutput -match "WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED" -or $checkOutput -match "Wsl/WSL_E_WSL_OPTIONAL_COMPONENT_REQUIRED") {
         Write-Host "Error: Windows Subsystem for Linux Optional Component is not fully active." -ForegroundColor Red
         Write-Host "System restart is REQUIRED." -ForegroundColor Red
         Write-Host "Please restart your computer and run this script again." -ForegroundColor Yellow
