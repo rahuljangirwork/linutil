@@ -57,13 +57,33 @@ main() {
         print_error "Systemd is NOT enabled or running."
         echo "K3s and Tailscale require systemd to function correctly."
         echo ""
-        echo "To enable systemd in WSL2:"
-        echo "1. Run the following command in this terminal:"
-        echo "   echo -e '[boot]\nsystemd=true' | sudo tee /etc/wsl.conf"
-        echo "2. Exit this terminal."
-        echo "3. Run 'wsl --shutdown' from PowerShell."
-        echo "4. Restart this WSL instance and re-run this script."
+        print_error "Systemd is NOT enabled or running."
+        echo "K3s and Tailscale require systemd to function correctly."
         echo ""
+        
+        # Check if config is already present but not applied (needs restart)
+        if grep -q "systemd=true" /etc/wsl.conf 2>/dev/null; then
+             echo "✅ Systemd is configured in /etc/wsl.conf but not active."
+        else
+             echo "Configuring Systemd in /etc/wsl.conf..."
+             # Check if [boot] section exists
+             if grep -q "\[boot\]" /etc/wsl.conf 2>/dev/null; then
+                 # Append to section (simplified: just ensure correct line exists)
+                 if ! grep -q "systemd=true" /etc/wsl.conf; then
+                     echo "systemd=true" | sudo tee -a /etc/wsl.conf > /dev/null
+                 fi
+             else
+                 # Append block
+                 echo -e "\n[boot]\nsystemd=true" | sudo tee -a /etc/wsl.conf > /dev/null
+             fi
+             print_success "Configuration added."
+        fi
+
+        echo ""
+        echo -e "${COLOR_YELLOW}ACTION REQUIRED:${COLOR_NC}"
+        echo "1. Exit this terminal."
+        echo "2. Run 'wsl --shutdown' from PowerShell."
+        echo "3. Restart this WSL instance and re-run this script."
         exit 1
     else
         print_success "Systemd is running."
