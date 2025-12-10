@@ -170,6 +170,10 @@ main() {
     # --- 6. SSH Configuration ---
     print_header "Setting up SSH"
     # Ensure keys exist
+    if ! dpkg -s openssh-server >/dev/null 2>&1; then
+        echo "Installing OpenSSH Server..."
+        apt-get update && apt-get install -y openssh-server
+    fi
     ssh-keygen -A >/dev/null 2>&1
     
     # Enable service
