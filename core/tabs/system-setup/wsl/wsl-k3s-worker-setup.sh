@@ -226,7 +226,7 @@ EOF
         echo "Restarting service to apply any new configurations..."
         systemctl restart k3s-agent
     else
-        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="agent --flannel-iface=tailscale0 --node-label kubernetes.io/os=linux-wsl --node-label env=wsl2" K3S_URL="$k3s_url" K3S_TOKEN="$k3s_token" sh -
+        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="agent --flannel-iface=tailscale0 --node-name=\"$hostname\" --node-label kubernetes.io/os=linux-wsl --node-label env=wsl2" K3S_URL="$k3s_url" K3S_TOKEN="$k3s_token" sh -
     fi
     
     if [ $? -eq 0 ]; then
