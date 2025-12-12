@@ -72,6 +72,12 @@ description = "Installs a complete RustDesk server (ID, Relay, API, WebUI) using
 script = "rahul-setups/rustdesk-setup.sh"
 task_list = "I"
 
+[[data.entries]]
+name = "Pi-hole Server"
+description = "Installs Pi-hole for network-wide ad blocking via Tailscale. Resolves Port 53 conflicts automatically."
+script = "rahul-setups/pihole-tailscale-setup.sh"
+task_list = "I"
+
 
 [[data]]
 name = "Communication Apps"
