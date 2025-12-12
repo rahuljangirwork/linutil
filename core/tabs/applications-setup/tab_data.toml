@@ -66,6 +66,13 @@ task_list = "RP"
 
 
 
+[[data.entries]]
+name = "RustDesk Server"
+description = "Installs a complete RustDesk server (ID, Relay, API, WebUI) using the all-in-one Docker image. Auto-detects Tailscale IP."
+script = "rahul-setups/rustdesk-setup.sh"
+task_list = "I"
+
+
 [[data]]
 name = "Communication Apps"
 
