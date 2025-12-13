@@ -4,10 +4,11 @@
 # This script sets up a fresh Windows machine for the Linutil K3s Worker.
 # Features:
 # 1. Enables Windows Features (WSL, Platform)
-# 2. Installs Ubuntu (if missing)
-# 3. Configures .wslconfig for performance and NON-STOP execution
-# 4. Enables Systemd
-# 5. Creates a HIDDEN, ROBUST background task to keep WSL alive 24/7
+# 2. Updates WSL to the latest version (Critical for stability)
+# 3. Installs Ubuntu (if missing)
+# 4. Configures .wslconfig for performance and NON-STOP execution
+# 5. Enables Systemd
+# 6. Creates a HIDDEN, ROBUST background task to keep WSL alive 24/7
 #
 # Usage: Run in PowerShell as Administrator
 # ==============================================================================
@@ -16,12 +17,28 @@ $ErrorActionPreference = "Stop"
 Write-Host "`n=== Linutil WSL Setup ===" -ForegroundColor Cyan
 
 # --- 1. Enable Windows Features ---
-Write-Host "[1/6] Enabling Windows Features..." -ForegroundColor Yellow
-$feat1 = dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
-$feat2 = dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+Write-Host "[1/7] Enabling Windows Features..." -ForegroundColor Yellow
 
-# Check if reboot is pending from DISM output
-if (($feat1 -match "restart") -or ($feat2 -match "restart")) {
+$restartRequired = $false
+
+# Helper to check and enable feature
+function Enable-FeatureIfMissing ($Name) {
+    $feat = Get-WindowsOptionalFeature -Online -FeatureName $Name
+    if ($feat.State -ne "Enabled") {
+        Write-Host "   Enabling $Name..." -ForegroundColor Cyan
+        $result = dism.exe /online /enable-feature /featurename:$Name /all /norestart
+        if ($result -match "restart") { return $true }
+    } else {
+        Write-Host "   ✅ $Name is already enabled." -ForegroundColor Green
+    }
+    return $false
+}
+
+if (Enable-FeatureIfMissing "Microsoft-Windows-Subsystem-Linux") { $restartRequired = $true }
+if (Enable-FeatureIfMissing "VirtualMachinePlatform") { $restartRequired = $true }
+
+# Check if reboot is pending
+if ($restartRequired) {
     Write-Host "`n⚠️  RESTART REQUIRED ⚠️" -ForegroundColor Red
     Write-Host "Windows features have been enabled."
     Write-Host "You MUST restart your computer now."
@@ -29,9 +46,37 @@ if (($feat1 -match "restart") -or ($feat2 -match "restart")) {
     exit 0
 }
 
-# --- 2. Install WSL (Ubuntu) ---
-Write-Host "`n[2/6] Checking Ubuntu Installation..." -ForegroundColor Yellow
-if (wsl -l -q 2>&1 | Select-String "Ubuntu") {
+# --- 2. Update WSL Kernel ---
+Write-Host "`n[2/7] Updating WSL Kernel..." -ForegroundColor Yellow
+try {
+    Write-Host "Running 'wsl --update' to ensure compatibility..."
+    # wsl --update can sometimes fail if already running or network issues, but we try it.
+    # We use Start-Process to wait for it properly.
+    $p = Start-Process wsl -ArgumentList "--update" -PassThru -Wait -NoNewWindow
+    if ($p.ExitCode -eq 0) {
+         Write-Host "✅ WSL updated." -ForegroundColor Green
+    } else {
+         Write-Host "ℹ️ WSL update exited with code $($p.ExitCode). Proceeding..." -ForegroundColor Gray
+    }
+} catch {
+    Write-Host "⚠️  Failed to run wsl --update. Proceeding, but errors may occur." -ForegroundColor DarkYellow
+}
+
+# --- 3. Install WSL (Ubuntu) ---
+Write-Host "`n[3/7] Checking Ubuntu Installation..." -ForegroundColor Yellow
+
+$ubuntuInstalled = $false
+try {
+    # This command can fail if WSL is totally broken or requires update (which we just tried to fix)
+    $list = wsl -l -q 2>&1
+    if ($list -match "Ubuntu") {
+        $ubuntuInstalled = $true
+    }
+} catch {
+    Write-Host "⚠️  Could not list distributions. WSL might be in a bad state." -ForegroundColor Red
+}
+
+if ($ubuntuInstalled) {
     Write-Host "✅ Ubuntu is already installed." -ForegroundColor Green
 } else {
     Write-Host "Installing Ubuntu..." -ForegroundColor Cyan
@@ -41,17 +86,31 @@ if (wsl -l -q 2>&1 | Select-String "Ubuntu") {
     } catch {
         Write-Host "⚠️  Standard install failed. Trying alternatives..." -ForegroundColor Yellow
         # Fallback for systems where --no-launch isn't supported or generic error
-        wsl --install -d Ubuntu
+        try {
+            wsl --install -d Ubuntu
+        } catch {
+             Write-Host "❌ Failed to install Ubuntu. Please install it manually from the Store." -ForegroundColor Red
+             exit 1
+        }
     }
 }
 
 # Get actual distro name
-$DistroName = (wsl -l -v | Where-Object { $_ -match "Run" -or $_ -match "Stop" } | Select-Object -First 1).Split(" ",[System.StringSplitOptions]::RemoveEmptyEntries)[1]
-if (-not $DistroName) { $DistroName = "Ubuntu" }
-Write-Host "   Target Distro: $DistroName" -ForegroundColor Gray
+try {
+    $DistroName = (wsl -l -v | Where-Object { $_ -match "Run" -or $_ -match "Stop" } | Select-Object -First 1).Split(" ",[System.StringSplitOptions]::RemoveEmptyEntries)[1]
+} catch {
+    $DistroName = $null
+}
 
-# --- 3. Configure .wslconfig (Performance & Keep-Alive) ---
-Write-Host "`n[3/6] Configuring .wslconfig (Performance & Keep-Alive)..." -ForegroundColor Yellow
+if (-not $DistroName) { 
+    $DistroName = "Ubuntu" 
+    Write-Host "   Defaulting Distro check to: $DistroName" -ForegroundColor Gray
+} else {
+    Write-Host "   Target Distro: $DistroName" -ForegroundColor Gray
+}
+
+# --- 4. Configure .wslconfig (Performance & Keep-Alive) ---
+Write-Host "`n[4/7] Configuring .wslconfig (Performance & Keep-Alive)..." -ForegroundColor Yellow
 $wslConfigPath = "$env:USERPROFILE\.wslconfig"
 $totalRAM = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
 $wslConfigContent = @"
@@ -71,11 +130,16 @@ nestedVirtualization=true
 pageReporting=true
 autoMemoryReclaim=gradual
 "@
-Set-Content -Path $wslConfigPath -Value $wslConfigContent -Force
-Write-Host "✅ .wslconfig updated (vmIdleTimeout=-1)." -ForegroundColor Green
 
-# --- 4. Enable Systemd ---
-Write-Host "`n[4/6] Enabling Systemd..." -ForegroundColor Yellow
+try {
+    Set-Content -Path $wslConfigPath -Value $wslConfigContent -Force
+    Write-Host "✅ .wslconfig updated (vmIdleTimeout=-1)." -ForegroundColor Green
+} catch {
+    Write-Host "⚠️  Could not write .wslconfig. Permission denied?" -ForegroundColor Red
+}
+
+# --- 5. Enable Systemd ---
+Write-Host "`n[5/7] Enabling Systemd..." -ForegroundColor Yellow
 # Wait for WSL to be ready
 Start-Sleep -Seconds 5
 try {
@@ -83,43 +147,90 @@ try {
     wsl -d $DistroName -u root -e bash -c "grep -q 'systemd=true' /etc/wsl.conf || echo -e '[boot]\nsystemd=true' >> /etc/wsl.conf"
     Write-Host "✅ Systemd verified." -ForegroundColor Green
 } catch {
-    Write-Host "⚠️  Could not run WSL command yet. A reboot might effectively be required." -ForegroundColor Yellow
+    Write-Host "⚠️  Could not run WSL command yet. A reboot might effectively be required or Distro not ready." -ForegroundColor Yellow
 }
 
-# --- 5. Create HIDDEN Background Task ---
-Write-Host "`n[5/6] Creating HIDDEN Background Task..." -ForegroundColor Yellow
+# --- 6. Create HIDDEN Background Task ---
+Write-Host "`n[6/7] Creating HIDDEN Background Task..." -ForegroundColor Yellow
 $TaskName = "WSL_K3s_Worker"
 
 # Delete old tasks
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 Unregister-ScheduledTask -TaskName "WSL_K3s_AutoStart" -Confirm:$false -ErrorAction SilentlyContinue
 
-# New Hidden Task
-# Action: Login shell to force boot
-$Action = New-ScheduledTaskAction -Execute "wsl.exe" -Argument "-d $DistroName --cd / -e bash -l -c 'sleep infinity'"
-# Trigger: At Logon (User context)
-$Trigger = New-ScheduledTaskTrigger -AtLogon
-# Settings: Hidden, Long execution, Restart if fails
-$Settings = New-ScheduledTaskSettingsSet -Hidden -ExecutionTimeLimit (New-TimeSpan -Days 0) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+# Create VBScript wrapper for truly hidden execution
+$vbsPath = "$env:USERPROFILE\WSL_Hidden.vbs"
+$vbsContent = @"
+Set objShell = CreateObject("WScript.Shell")
+objShell.Run "wsl.exe -d $DistroName -e sleep infinity", 0, False
+"@
+Set-Content -Path $vbsPath -Value $vbsContent -Force
+Write-Host "   Created VBScript: $vbsPath" -ForegroundColor Gray
 
-Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Settings $Settings -RunLevel Highest -Force | Out-Null
-Write-Host "✅ Task '$TaskName' registered (Hidden)." -ForegroundColor Green
+# Action: Execute VBScript (completely hidden)
+$Action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$vbsPath`""
 
-# --- 6. Start & Restart ---
-Write-Host "`n[6/6] Applying Configuration..." -ForegroundColor Yellow
-Write-Host "Shutting down WSL to apply settings..."
+# Trigger: At Logon for the current user
+$Trigger = New-ScheduledTaskTrigger -AtLogon -User $env:USERNAME
+
+# Settings: Power friendly but persistent
+$Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit 0 -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+
+# Principal: Run as current user (Interactive)
+$Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive
+
+try {
+    Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal -Force | Out-Null
+    Write-Host "✅ Task '$TaskName' registered (Completely Hidden via VBScript)." -ForegroundColor Green
+} catch {
+    Write-Host "⚠️  Failed to register scheduled task. Try identifying as Admin?" -ForegroundColor Red
+}
+
+# --- 7. Start & Restart ---
+Write-Host "`n[7/7] Applying Configuration..." -ForegroundColor Yellow
+Write-Host "Shutting down WSL to ensure settings apply..."
 wsl --shutdown
-Start-Sleep -Seconds 3
+Start-Sleep -Seconds 5
 
 Write-Host "Starting Background Task..."
-Start-ScheduledTask -TaskName $TaskName
+Start-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 
-# Verification
-Start-Sleep -Seconds 5
-if (Get-Process -Name "wsl*" -ErrorAction SilentlyContinue) {
+# Verification Loop
+Write-Host "Verifying WSL status..."
+$maxRetries = 10
+$isRunning = $false
+
+for ($i = 1; $i -le $maxRetries; $i++) {
+    $status = wsl -l -v 2>&1 | Out-String
+    if ($status -match "Running") {
+        $isRunning = $true
+        break
+    }
+    Write-Host "   Waiting for WSL to start... ($i/$maxRetries)" -ForegroundColor Gray
+    Start-Sleep -Seconds 2
+}
+
+if ($isRunning) {
     Write-Host "`n✅ SUCCESS: WSL is running in the background!" -ForegroundColor Green
+    Get-Process -Name "wsl*" | Select-Object Id, ProcessName, StartTime | Format-Table -AutoSize | Out-String | Write-Host
 } else {
-    Write-Host "`n⚠️  WSL process not seen yet. It might still be starting." -ForegroundColor Yellow
+    Write-Host "`n⚠️  WSL didn't start automatically. Attempting force start..." -ForegroundColor Yellow
+    Start-ScheduledTask -TaskName $TaskName
+    Start-Sleep -Seconds 5
+    
+    if (wsl -l -v | Select-String "Running") {
+        Write-Host "✅ SUCCESS: WSL is running now." -ForegroundColor Green
+    } else {
+        Write-Host "⚠️  Scheduled Task failed to start WSL. Trying direct fallback..." -ForegroundColor Yellow
+        Start-Process -FilePath "wsl.exe" -ArgumentList "-d $DistroName --cd / -e bash -c 'sleep infinity'" -WindowStyle Hidden
+        Start-Sleep -Seconds 3
+        
+        if (wsl -l -v | Select-String "Running") {
+             Write-Host "✅ SUCCESS: WSL started via fallback (Hidden Process)." -ForegroundColor Green
+        } else {
+             Write-Host "❌ WSL failed to start completely. Please check logs." -ForegroundColor Red
+        }
+    }
 }
 
 Write-Host "`n=== Setup Complete! ===" -ForegroundColor Cyan
