@@ -52,13 +52,18 @@ Write-Host "✅ WSL shutdown complete." -ForegroundColor Green
 
 # --- 4. List Distributions Before Removal ---
 Write-Host "`n[4/8] Checking installed distributions..." -ForegroundColor Cyan
-$rawOutput = wsl -l -q 2>&1
-$distros = $rawOutput | Where-Object { 
-    $_.Trim() -and 
-    $_ -notmatch "Windows" -and 
+$rawOutput = wsl -l -q 2>&1 | Out-String
+# Split by newlines and clean each line
+$distros = $rawOutput -split "`n" | ForEach-Object {
+    # Remove null bytes, BOM, and other special chars
+    $cleaned = $_ -replace "`0", "" -replace "\uFEFF", "" -replace "[^\x20-\x7E\r\n]", ""
+    $cleaned.Trim()
+} | Where-Object { 
+    $_ -and 
     $_.Length -gt 1 -and
-    $_ -match '\S'  # Contains non-whitespace characters
+    $_ -notmatch "Windows"
 }
+
 if ($distros) {
     Write-Host "Found distributions:" -ForegroundColor Yellow
     $distros | ForEach-Object { Write-Host "   - $_" -ForegroundColor White }
@@ -70,17 +75,13 @@ if ($distros) {
 Write-Host "`n[5/8] Unregistering distributions (DELETES ALL DATA)..." -ForegroundColor Red
 if ($distros) {
     foreach ($distro in $distros) {
-        $distroName = $distro.Trim() -replace '[^\x20-\x7E]', ''  # Remove non-printable chars
-        if ($distroName -and $distroName.Length -gt 1) {
-            try {
-                Write-Host "   Removing $distroName..." -ForegroundColor Yellow
-                $result = wsl --unregister $distroName 2>&1
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Host "✅ $distroName removed." -ForegroundColor Green
-                }
-            } catch {
-                Write-Host "⚠️  Failed to remove $distroName" -ForegroundColor Yellow
-            }
+        $distroName = $distro.Trim()
+        Write-Host "   Removing $distroName..." -ForegroundColor Yellow
+        $result = wsl --unregister $distroName 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "✅ $distroName removed." -ForegroundColor Green
+        } else {
+            Write-Host "⚠️  Failed to remove $distroName" -ForegroundColor Yellow
         }
     }
 } else {
