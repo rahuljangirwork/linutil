@@ -188,16 +188,16 @@ try {
 
 # --- 7. Start & Restart ---
 Write-Host "`n[7/7] Applying Configuration..." -ForegroundColor Yellow
-Write-Host "Shutting down WSL to ensure settings apply..."
+Write-Host "Shutting down WSL to apply systemd changes..."
 wsl --shutdown
-Start-Sleep -Seconds 5
+Start-Sleep -Seconds 10
 
 Write-Host "Starting Background Task..."
 Start-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 
-# Verification Loop
-Write-Host "Verifying WSL status..."
-$maxRetries = 10
+# Verification Loop (systemd needs more time)
+Write-Host "Verifying WSL status (systemd initialization may take 30-60 seconds)..."
+$maxRetries = 20
 $isRunning = $false
 
 for ($i = 1; $i -le $maxRetries; $i++) {
@@ -207,30 +207,24 @@ for ($i = 1; $i -le $maxRetries; $i++) {
         break
     }
     Write-Host "   Waiting for WSL to start... ($i/$maxRetries)" -ForegroundColor Gray
-    Start-Sleep -Seconds 2
+    Start-Sleep -Seconds 3
 }
 
 if ($isRunning) {
     Write-Host "`n✅ SUCCESS: WSL is running in the background!" -ForegroundColor Green
-    Get-Process -Name "wsl*" | Select-Object Id, ProcessName, StartTime | Format-Table -AutoSize | Out-String | Write-Host
-} else {
-    Write-Host "`n⚠️  WSL didn't start automatically. Attempting force start..." -ForegroundColor Yellow
-    Start-ScheduledTask -TaskName $TaskName
+    # Verify systemd is actually running
     Start-Sleep -Seconds 5
-    
-    if (wsl -l -v | Select-String "Running") {
-        Write-Host "✅ SUCCESS: WSL is running now." -ForegroundColor Green
-    } else {
-        Write-Host "⚠️  Scheduled Task failed to start WSL. Trying direct fallback..." -ForegroundColor Yellow
-        Start-Process -FilePath "wsl.exe" -ArgumentList "-d $DistroName --cd / -e bash -c 'sleep infinity'" -WindowStyle Hidden
-        Start-Sleep -Seconds 3
-        
-        if (wsl -l -v | Select-String "Running") {
-             Write-Host "✅ SUCCESS: WSL started via fallback (Hidden Process)." -ForegroundColor Green
-        } else {
-             Write-Host "❌ WSL failed to start completely. Please check logs." -ForegroundColor Red
-        }
+    $systemdCheck = wsl -d $DistroName -e bash -c "ps -p 1 -o comm=" 2>&1
+    if ($systemdCheck -match "systemd") {
+        Write-Host "✅ Systemd is active (PID 1)" -ForegroundColor Green
     }
+    Get-Process -Name "wsl*" -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, StartTime | Format-Table -AutoSize
+} else {
+    Write-Host "`n⚠️  WSL didn't start in 60 seconds. Manual start required..." -ForegroundColor Yellow
+    Write-Host "Run this command to start manually:" -ForegroundColor Cyan
+    Write-Host "   Start-ScheduledTask -TaskName '$TaskName'" -ForegroundColor White
+    Write-Host "Or check VBScript directly:" -ForegroundColor Cyan
+    Write-Host "   wscript `"$vbsPath`"" -ForegroundColor White
 }
 
 Write-Host "`n=== Setup Complete! ===" -ForegroundColor Cyan
