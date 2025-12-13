@@ -52,7 +52,13 @@ Write-Host "✅ WSL shutdown complete." -ForegroundColor Green
 
 # --- 4. List Distributions Before Removal ---
 Write-Host "`n[4/8] Checking installed distributions..." -ForegroundColor Cyan
-$distros = wsl -l -q 2>&1 | Where-Object { $_.Trim() -and $_ -notmatch "Windows" }
+$rawOutput = wsl -l -q 2>&1
+$distros = $rawOutput | Where-Object { 
+    $_.Trim() -and 
+    $_ -notmatch "Windows" -and 
+    $_.Length -gt 1 -and
+    $_ -match '\S'  # Contains non-whitespace characters
+}
 if ($distros) {
     Write-Host "Found distributions:" -ForegroundColor Yellow
     $distros | ForEach-Object { Write-Host "   - $_" -ForegroundColor White }
@@ -64,12 +70,14 @@ if ($distros) {
 Write-Host "`n[5/8] Unregistering distributions (DELETES ALL DATA)..." -ForegroundColor Red
 if ($distros) {
     foreach ($distro in $distros) {
-        $distroName = $distro.Trim()
-        if ($distroName -and $distroName.Length -gt 0) {
+        $distroName = $distro.Trim() -replace '[^\x20-\x7E]', ''  # Remove non-printable chars
+        if ($distroName -and $distroName.Length -gt 1) {
             try {
                 Write-Host "   Removing $distroName..." -ForegroundColor Yellow
-                wsl --unregister $distroName 2>&1 | Out-Null
-                Write-Host "✅ $distroName removed." -ForegroundColor Green
+                $result = wsl --unregister $distroName 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Host "✅ $distroName removed." -ForegroundColor Green
+                }
             } catch {
                 Write-Host "⚠️  Failed to remove $distroName" -ForegroundColor Yellow
             }
