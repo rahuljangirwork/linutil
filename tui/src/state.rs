@@ -4,7 +4,7 @@ use crate::{
     float::{Float, FloatContent},
     floating_text::FloatingText,
     hint::{create_shortcut_list, Shortcut},
-    root::check_root_status,
+
     running_command::RunningCommand,
     shortcuts,
     theme::Theme,
@@ -66,7 +66,9 @@ pub struct AppState {
     tip: &'static str,
     size_bypass: bool,
     skip_confirmation: bool,
+
     mouse_enabled: bool,
+    is_uninstalling: bool,
 }
 
 pub enum Focus {
@@ -103,9 +105,9 @@ enum ScrollDir {
 impl AppState {
     pub fn new(args: Args) -> Self {
         #[cfg(unix)]
-        let root_warning = check_root_status(args.bypass_root);
+        let root_warning = crate::root::check_root_status(args.bypass_root);
         #[cfg(not(unix))]
-        let root_warning = None;
+        let root_warning: Option<crate::float::Float<crate::floating_text::FloatingText>> = None;
 
         let tabs = linutil_core::get_tabs(!args.override_validation);
         let root_id = tabs[0].tree.root().id();
@@ -134,6 +136,7 @@ impl AppState {
             size_bypass: args.size_bypass,
             skip_confirmation: args.skip_confirmation,
             mouse_enabled: args.mouse,
+            is_uninstalling: false,
         };
 
         #[cfg(unix)]
@@ -193,7 +196,10 @@ impl AppState {
             shortcuts!(
                 ("Run selected command", ["l", "Right", "Enter"]),
                 ("Enable preview", ["p"]),
-                ("Command Description", ["d"])
+                ("Run selected command", ["l", "Right", "Enter"]),
+                ("Enable preview", ["p"]),
+                ("Command Description", ["d"]),
+                ("Uninstall", ["U"])
             )
         }
     }
@@ -600,6 +606,7 @@ impl AppState {
                 KeyCode::Char('p') | KeyCode::Char('P') => self.enable_preview(),
                 KeyCode::Char('d') | KeyCode::Char('D') => self.enable_description(),
                 KeyCode::Enter | KeyCode::Char('l') | KeyCode::Right => self.handle_enter(),
+                KeyCode::Char('U') => self.handle_uninstall(),
                 KeyCode::Char('h') | KeyCode::Left => self.go_back(),
                 KeyCode::Char(' ') if self.multi_select => self.toggle_selection(),
                 _ => {}
@@ -835,9 +842,29 @@ impl AppState {
                         self.selected_commands.push(node);
                     }
                 }
+                self.is_uninstalling = false;
                 self.spawn_confirmprompt();
             }
             SelectedItem::None => {}
+        }
+    }
+
+    fn handle_uninstall(&mut self) {
+        if let SelectedItem::Command = self.get_selected_item_type() {
+             if self.selected_commands.is_empty() {
+                if let Some(node) = self.get_selected_node() {
+                    // Only proceed if there is actually an uninstall command
+                    if matches!(node.uninstall_command, Command::None) {
+                        return;
+                    }
+                    self.selected_commands.push(node);
+                }
+            } else {
+                // In multi-select, ensure we only try to uninstall things that HAVE uninstall commands?
+                // For now allow it, and we filter later.
+            }
+            self.is_uninstalling = true;
+            self.spawn_confirmprompt();
         }
     }
 
@@ -845,12 +872,32 @@ impl AppState {
         let commands: Vec<&Command> = self
             .selected_commands
             .iter()
-            .map(|node| &node.command)
+            .map(|node| {
+                if self.is_uninstalling {
+                    &node.uninstall_command
+                } else {
+                    &node.command
+                }
+            })
             .collect();
 
-        let command = RunningCommand::new(&commands);
+        // If uninstalling, filter out None commands to avoid running nothing or crashing
+        let valid_commands: Vec<&Command> = commands
+             .into_iter()
+             .filter(|cmd| !matches!(cmd, Command::None))
+             .collect();
+             
+        if valid_commands.is_empty() {
+             // Maybe show error? For now just clear selection to avoid stuck state
+             self.selected_commands.clear();
+             self.is_uninstalling = false;
+             return;
+        }
+
+        let command = RunningCommand::new(&valid_commands);
         self.spawn_float(command, FLOAT_SIZE, FLOAT_SIZE);
         self.selected_commands.clear();
+        self.is_uninstalling = false;
     }
 
     fn spawn_float<T: FloatContent + 'static>(&mut self, float: T, width: u16, height: u16) {

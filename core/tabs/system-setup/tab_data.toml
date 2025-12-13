@@ -280,3 +280,14 @@ description = "Uninstalls K3s Agent and removes WSL mount fixes."
 script = "wsl/wsl-k3s-cleanup.sh"
 task_list = "RP"
 multi_select = false
+
+[[data]]
+name = "Windows"
+
+[[data.entries]]
+name = "RustDesk"
+description = "Install/Uninstall RustDesk remote desktop software"
+script = "windows/install_rustdesk.ps1"
+uninstall_script = "windows/uninstall_rustdesk.ps1"
+task_list = "I"
+multi_select = false

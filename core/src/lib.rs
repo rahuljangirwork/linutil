@@ -33,6 +33,7 @@ pub struct ListNode {
     pub name: String,
     pub description: String,
     pub command: Command,
+    pub uninstall_command: Command,
     pub task_list: String,
     pub multi_select: bool,
 }
@@ -60,6 +61,7 @@ mod tests {
             name: "command1".to_string(),
             description: "herro word :3".to_string(),
             command: Command::Raw("echo 'cat memes 🙀'".to_string()),
+            uninstall_command: Command::None,
             task_list: "".to_string(),
             multi_select: false,
         });

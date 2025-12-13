@@ -6,10 +6,12 @@ use std::{
     fs::File,
     io::{BufRead, BufReader, Read},
     ops::{Deref, DerefMut},
-    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     rc::Rc,
 };
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use temp_dir::TempDir;
 
 const TAB_DATA: Dir = include_dir!("$CARGO_MANIFEST_DIR/tabs");
@@ -65,6 +67,7 @@ pub fn get_tabs(validate: bool) -> TabList {
                 name: "root".to_string(),
                 description: String::new(),
                 command: Command::None,
+                uninstall_command: Command::None,
                 task_list: String::new(),
                 multi_select: false,
             }));
@@ -103,6 +106,8 @@ struct Entry {
     entry_type: EntryType,
     #[serde(default)]
     task_list: String,
+    #[serde(default)]
+    uninstall_script: Option<PathBuf>,
     #[serde(default = "default_true")]
     multi_select: bool,
 }
@@ -196,6 +201,7 @@ fn create_directory(
                     name: entry.name,
                     description: entry.description,
                     command: Command::None,
+                    uninstall_command: Command::None,
                     task_list: String::new(),
                     multi_select,
                 }));
@@ -206,6 +212,7 @@ fn create_directory(
                     name: entry.name,
                     description: entry.description,
                     command: Command::Raw(command),
+                    uninstall_command: Command::None,
                     task_list: String::new(),
                     multi_select,
                 }));
@@ -224,6 +231,26 @@ fn create_directory(
                             executable,
                             args,
                             file: script,
+                        },
+                        uninstall_command: {
+                            if let Some(uninstall_script) = entry.uninstall_script {
+                                let uninstall_script = command_dir.join(uninstall_script);
+                                if !uninstall_script.exists() {
+                                    panic!("Uninstall Script {} does not exist", uninstall_script.display());
+                                }
+
+                                if let Some((executable, args)) = get_shebang(&uninstall_script, validate) {
+                                    Command::LocalFile {
+                                        executable,
+                                        args,
+                                        file: uninstall_script,
+                                    }
+                                } else {
+                                    Command::None
+                                }
+                            } else {
+                                Command::None
+                            }
                         },
                         task_list: entry.task_list,
                         multi_select,
@@ -264,9 +291,14 @@ fn get_shebang(script_path: &Path, validate: bool) -> Option<(String, Vec<String
 }
 
 fn is_executable(path: &Path) -> bool {
-    path.metadata()
+    #[cfg(unix)]
+    return path
+        .metadata()
         .map(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
-        .unwrap_or(false)
+        .unwrap_or(false);
+
+    #[cfg(not(unix))]
+    return true; // checking executable bit on windows is unreliable/pointless for this context usually, or we assume all files are 'executable' enough for shell
 }
 
 impl TabDirectories {
@@ -321,14 +353,19 @@ mod tests {
             "#!/bin/sh\necho 'NICE cat of the week: SPOINGUS (cuddled nicely)'",
         )
         .unwrap();
+        #[cfg(unix)]
         assert!(!is_executable(&file_path));
 
-        let mut permissions = std::fs::metadata(&file_path).unwrap().permissions();
-        permissions.set_mode(0o755);
-        std::fs::set_permissions(&file_path, permissions).unwrap();
-        assert!(is_executable(&file_path));
+        #[cfg(unix)]
+        {
+            let mut permissions = std::fs::metadata(&file_path).unwrap().permissions();
+            permissions.set_mode(0o755);
+            std::fs::set_permissions(&file_path, permissions).unwrap();
+            assert!(is_executable(&file_path));
+        }
 
         let non_existent_path = temp_dir.path().join("non_existent.sh");
+        #[cfg(unix)]
         assert!(!is_executable(&non_existent_path));
 
         drop(temp_dir);
@@ -349,7 +386,7 @@ mod tests {
             result,
             Some((
                 "/bin/bash".to_string(),
-                vec!["/path/to/test_script.sh".to_string()]
+                vec![script_path.to_string_lossy().to_string()]
             ))
             .map(|(exe, args)| (
                 exe,
@@ -374,7 +411,10 @@ mod tests {
         )
         .unwrap();
         let result_invalid_shebang = get_shebang(&script_invalid_shebang_path, true);
+        #[cfg(unix)]
         assert!(result_invalid_shebang.is_none());
+        #[cfg(not(unix))]
+        assert!(result_invalid_shebang.is_some());
         let result_invalid_shebang_no_validate = get_shebang(&script_invalid_shebang_path, false);
         assert_eq!(
             result_invalid_shebang_no_validate,
@@ -384,6 +424,83 @@ mod tests {
             ))
         );
 
+        drop(temp_dir);
+    }
+    #[test]
+    fn test_uninstall_parsing() {
+        let temp_dir = crate::tests::create_temp_dir();
+        let tabs_dir = temp_dir.path().join("tabs");
+        std::fs::create_dir(&tabs_dir).unwrap();
+
+        let tab_toml = tabs_dir.join("tab_data.toml");
+        std::fs::write(
+            &tab_toml,
+            r#"
+            name = "TestTab"
+            [[data]]
+            name = "Group"
+            [[data.entries]]
+            name = "Uninstallable"
+            description = "An app"
+            script = "install.sh"
+            uninstall_script = "uninstall.sh"
+            "#,
+        )
+        .unwrap();
+
+        let install_script = tabs_dir.join("install.sh");
+        std::fs::write(&install_script, "#!/bin/sh\necho install").unwrap();
+        
+        let uninstall_script = tabs_dir.join("uninstall.sh");
+        std::fs::write(&uninstall_script, "#!/bin/sh\necho uninstall").unwrap();
+
+        // Make scripts executable (mocking permissions for test environment if needed, though on Windows this is less strict for FS ops usually)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&install_script).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&install_script, perms).unwrap();
+            
+            let mut perms = std::fs::metadata(&uninstall_script).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&uninstall_script, perms).unwrap();
+        }
+
+        let directory = tabs_dir.clone();
+        let data = std::fs::read_to_string(&tab_toml).expect("Failed to read tab data");
+        let tab_data: TabEntry = toml::from_str(&data).expect("Failed to parse tab data");
+        
+        let mut tree = Tree::new(Rc::new(ListNode {
+            name: "root".to_string(),
+            description: String::new(),
+            command: Command::None,
+            uninstall_command: Command::None,
+            task_list: String::new(),
+            multi_select: false,
+        }));
+        let mut root = tree.root_mut();
+        
+        // We set validate=false to avoid 'which' checks or strict shebang validations that might fail depending on host env
+        create_directory(tab_data.data, &mut root, &directory, false, true);
+
+        let root_node = tree.root();
+        let group = root_node.first_child().unwrap();
+        let val = group.first_child().unwrap().value();
+        
+        assert_eq!(val.name, "Uninstallable");
+        if let Command::LocalFile { file, .. } = &val.command {
+            assert!(file.ends_with("install.sh"));
+        } else {
+            panic!("Expected install command to be LocalFile");
+        }
+
+        if let Command::LocalFile { file, .. } = &val.uninstall_command {
+            assert!(file.ends_with("uninstall.sh"));
+        } else {
+            panic!("Expected uninstall command to be LocalFile");
+        }
+        
         drop(temp_dir);
     }
 }
