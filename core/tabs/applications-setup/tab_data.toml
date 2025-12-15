@@ -8,17 +8,7 @@ name = "Rahul Setups"
 
 
 
-[[data.entries]]
-name = "macos-setup"
-description = "Custom macOS setup script"
-script = "rahul-setups/macos.sh"
-task_list = "I"
 
-[[data.entries]]
-name = "cursor-setup"
-description = "Custom cursor-setup"
-script = "rahul-setups/cursor-setup.sh"
-task_list = "I"
 
 
 [[data.entries]]
