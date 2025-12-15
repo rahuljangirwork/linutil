@@ -98,6 +98,55 @@ installZoxide() {
     fi
 }
 
+installFastfetch() {
+    if ! command_exists fastfetch; then
+        printf "%b\n" "${YELLOW}Installing Fastfetch...${RC}"
+        case "$PACKAGER" in
+        pacman)
+            "$ESCALATION_TOOL" "$PACKAGER" -S --needed --noconfirm fastfetch
+            ;;
+        apt-get | nala)
+            case "$ARCH" in
+                x86_64)
+                    DEB_FILE="fastfetch-linux-amd64.deb"
+                    ;;
+                aarch64)
+                    DEB_FILE="fastfetch-linux-aarch64.deb"
+                    ;;
+            esac
+            curl -sSLo "/tmp/fastfetch.deb" "https://github.com/fastfetch-cli/fastfetch/releases/latest/download/$DEB_FILE"
+            "$ESCALATION_TOOL" "$PACKAGER" install -y /tmp/fastfetch.deb
+            rm /tmp/fastfetch.deb
+            ;;
+        apk)
+            "$ESCALATION_TOOL" "$PACKAGER" add fastfetch
+            ;;
+        xbps-install)
+            "$ESCALATION_TOOL" "$PACKAGER" -Sy fastfetch
+            ;;
+        *)
+            "$ESCALATION_TOOL" "$PACKAGER" install -y fastfetch
+            ;;
+        esac
+    else
+        printf "%b\n" "${GREEN}Fastfetch is already installed.${RC}"
+    fi
+}
+
+setupFastfetchConfig() {
+    printf "%b\n" "${YELLOW}Copying Fastfetch config files...${RC}"
+    if [ -d "${HOME}/.config/fastfetch" ] && [ ! -d "${HOME}/.config/fastfetch-bak" ]; then
+        cp -r "${HOME}/.config/fastfetch" "${HOME}/.config/fastfetch-bak"
+    fi
+    mkdir -p "${HOME}/.config/fastfetch/"
+    if [ -f "$gitpath/config.jsonc" ]; then
+        ln -sf "$gitpath/config.jsonc" "${HOME}/.config/fastfetch/config.jsonc"
+    else
+         curl -sSLo "${HOME}/.config/fastfetch/config.jsonc" https://raw.githubusercontent.com/rahuljangirwork/bash-rahul/main/config.jsonc
+    fi
+}
+
+
 linkConfig() {
     OLD_BASHRC="$HOME/.bashrc"
     if [ -e "$OLD_BASHRC" ] && [ ! -e "$HOME/.bashrc.bak" ]; then
@@ -120,11 +169,56 @@ linkConfig() {
     printf "%b\n" "${GREEN}Done! restart your shell to see the changes.${RC}"
 }
 
+uninstall() {
+    printf "%b\n" "${YELLOW}Uninstalling MyBash and components...${RC}"
+
+    # Remove fastfetch
+    if command_exists fastfetch; then
+        printf "%b\n" "${YELLOW}Removing fastfetch...${RC}"
+        case "$PACKAGER" in
+            pacman) "$ESCALATION_TOOL" "$PACKAGER" -Rns --noconfirm fastfetch ;;
+            apt-get|nala) "$ESCALATION_TOOL" "$PACKAGER" remove -y fastfetch ;;
+            apk) "$ESCALATION_TOOL" "$PACKAGER" del fastfetch ;;
+            xbps-install) "$ESCALATION_TOOL" xbps-remove -Ry fastfetch ;;
+            dnf|zypper) "$ESCALATION_TOOL" "$PACKAGER" remove -y fastfetch ;;
+            *) printf "%b\n" "${RED}Unable to remove fastfetch automatically.${RC}" ;;
+        esac
+    fi
+    rm -rf "${HOME}/.config/fastfetch"
+
+    # Restore bashrc
+    if [ -e "$HOME/.bashrc.bak" ]; then
+        printf "%b\n" "${YELLOW}Restoring backup .bashrc...${RC}"
+        mv "$HOME/.bashrc.bak" "$HOME/.bashrc"
+    else
+        printf "%b\n" "${YELLOW}No backup .bashrc found. Removing link...${RC}"
+        rm "$HOME/.bashrc"
+    fi
+
+    # Remove config links/files
+    rm "$HOME/.config/starship.toml"
+    
+    # Remove repo
+    if [ -d "$gitpath" ]; then
+        printf "%b\n" "${YELLOW}Removing mybash repository...${RC}"
+        rm -rf "$gitpath"
+    fi
+
+    printf "%b\n" "${GREEN}Uninstallation complete.${RC}"
+}
+
 checkEnv
 checkEscalationTool
-installDepend
-cloneMyBash
-installFont
-installStarshipAndFzf
-installZoxide
-linkConfig
+
+if [ "$1" = "uninstall" ]; then
+    uninstall
+else
+    installDepend
+    cloneMyBash
+    installFont
+    installStarshipAndFzf
+    installZoxide
+    installFastfetch
+    setupFastfetchConfig
+    linkConfig
+fi
