@@ -160,7 +160,7 @@ linkConfig() {
     printf "%b\n" "${YELLOW}Linking new bash config file...${RC}"
     
     # Copy custom starship.toml if it exists locally
-    if [ -f "starship.toml" ]; then
+    if [ -f "starship.toml" ] && [ ! "starship.toml" -ef "$gitpath/starship.toml" ]; then
          printf "%b\n" "${YELLOW}Copying custom starship.toml theme...${RC}"
          cp "starship.toml" "$gitpath/starship.toml"
     fi
