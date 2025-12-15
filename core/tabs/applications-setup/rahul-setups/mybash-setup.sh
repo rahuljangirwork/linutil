@@ -6,25 +6,45 @@ gitpath="$HOME/.local/share/mybash"
 
 installDepend() {
     if ! command_exists bash bash-completion tar bat tree unzip fontconfig git; then
-    printf "%b\n" "${YELLOW}Installing Bash...${RC}"
-    case "$PACKAGER" in
-        pacman)
-            "$ESCALATION_TOOL" "$PACKAGER" -S --needed --noconfirm bash bash-completion tar bat tree unzip fontconfig git
-            ;;
-        *)
-            "$ESCALATION_TOOL" "$PACKAGER" install -y bash bash-completion tar bat tree unzip fontconfig git
-            ;;
-    esac
+        printf "%b\n" "${YELLOW}Installing Bash...${RC}"
+        case "$PACKAGER" in
+            pacman)
+                "$ESCALATION_TOOL" "$PACKAGER" -S --needed --noconfirm bash bash-completion tar bat tree unzip fontconfig git
+                ;;
+            apk)
+                "$ESCALATION_TOOL" "$PACKAGER" add bash bash-completion tar bat tree unzip fontconfig git
+                ;;
+            xbps-install)
+                "$ESCALATION_TOOL" "$PACKAGER" -Sy bash bash-completion tar bat tree unzip fontconfig git
+                ;;
+            dnf)
+                "$ESCALATION_TOOL" "$PACKAGER" install -y bash bash-completion tar bat tree unzip fontconfig git
+                ;;
+            zypper)
+                "$ESCALATION_TOOL" "$PACKAGER" install -y bash bash-completion tar bat tree unzip fontconfig git
+                ;;
+            *)
+                "$ESCALATION_TOOL" "$PACKAGER" install -y bash bash-completion tar bat tree unzip fontconfig git
+                ;;
+        esac
     fi
 }
 
 cloneMyBash() {
     # Check if the dir exists before attempting to clone into it.
     if [ -d "$gitpath" ]; then
-        rm -rf "$gitpath"
+        if [ -d "$gitpath/.git" ]; then
+            printf "%b\n" "${YELLOW}Updating existing mybash repository...${RC}"
+            cd "$gitpath" && git pull
+        else
+            printf "%b\n" "${YELLOW}Directory exists but is not a git repo. Backing up and cloning...${RC}"
+            mv "$gitpath" "${gitpath}.bak.$(date +%s)"
+            cd "$HOME" && git clone https://github.com/rahuljangirwork/bash-rahul.git "$gitpath"
+        fi
+    else
+        mkdir -p "$HOME/.local/share" # Only create the dir if it doesn't exist.
+        cd "$HOME" && git clone https://github.com/rahuljangirwork/bash-rahul.git "$gitpath"
     fi
-    mkdir -p "$HOME/.local/share" # Only create the dir if it doesn't exist.
-    cd "$HOME" && git clone https://github.com/ChrisTitusTech/mybash.git "$gitpath"
 }
 
 installFont() {
