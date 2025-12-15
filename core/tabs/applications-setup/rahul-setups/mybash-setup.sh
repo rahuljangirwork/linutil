@@ -158,6 +158,13 @@ linkConfig() {
     fi
 
     printf "%b\n" "${YELLOW}Linking new bash config file...${RC}"
+    
+    # Copy custom starship.toml if it exists locally
+    if [ -f "starship.toml" ]; then
+         printf "%b\n" "${YELLOW}Copying custom starship.toml theme...${RC}"
+         cp "starship.toml" "$gitpath/starship.toml"
+    fi
+
     ln -svf "$gitpath/.bashrc" "$HOME/.bashrc" || {
         printf "%b\n" "${RED}Failed to create symbolic link for .bashrc${RC}"
         exit 1
